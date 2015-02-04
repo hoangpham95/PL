@@ -95,6 +95,7 @@
      eval({* E1 E2}) = eval(E1) * eval(E2)
      eval({/ E1 E2}) = eval(E1) / eval(E2)
      eval({sqrt E})  = sqrt(eval(E))
+                     = error! if eval(E) is negative
      eval(id)        = error!
      eval({with {x E1} E2}) = eval(E2[eval(E1)/x])
 |#
