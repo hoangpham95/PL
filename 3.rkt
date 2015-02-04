@@ -94,6 +94,7 @@
      eval({- E1 E2}) = eval(E1) - eval(E2)
      eval({* E1 E2}) = eval(E1) * eval(E2)
      eval({/ E1 E2}) = eval(E1) / eval(E2)
+                     = error! if eval(E2) contains a element 0
      eval({sqrt E})  = sqrt(eval(E))
                      = error! if eval(E) is negative
      eval(id)        = error!
@@ -108,13 +109,24 @@
     [(Add l r) (bin-op + (eval l) (eval r))]
     [(Sub l r) (bin-op - (eval l) (eval r))]
     [(Mul l r) (bin-op * (eval l) (eval r))]
-    [(Div l r) (bin-op / (eval l) (eval r))]
+    [(Div l r) (let ([er (eval r)])
+                 (if (contain0? er)
+                     (error 'eval "devided by zero")
+                     (bin-op / (eval l) er)))]
     [(Sqrt e) (sqrt+ (eval e))]
     [(With bound-id named-expr bound-body)
      (eval (subst bound-body
                   bound-id
                   (Num (eval named-expr))))]
     [(Id name) (error 'eval "free identifier: ~s" name)]))
+
+(: contain0? : (Listof Number) -> Boolean)
+;; a function that detect if a list contains a element
+;; which is zero
+(define (contain0? l)
+  (cond [(null? l) #f]
+        [(zero? (car l)) #t]
+        [else (contain0? (cdr l))]))
 
  (: sqrt+ : (Listof Number) -> (Listof Number))
 ;; a version of `sqrt' that takes a list of numbers, and return a list
@@ -164,6 +176,8 @@
 (test (run "{with {x 5} {+ x {with {y 3} x}}}") => '(10))
 (test (run "{with {x 5} {with {y x} y}}") => '(5))
 (test (run "{with {x 5} {with {x x} x}}") => '(5))
+(test (run "{/ {+ 10 {sqrt 25}} {+ 3 {sqrt 9}}}")
+      =error> "devided by zero")
 (test (run "{with x 5 {with x x x}}")
       =error> "bad `with' syntax in (with x 5 (with x x x))")
 (test (run "{null}") =error> "bad syntax in (null)")
