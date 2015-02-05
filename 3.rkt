@@ -15,7 +15,7 @@
 
 ;; MUWAE abstract syntax trees
 (define-type MUWAE
-  [Num  Number]
+  [Num  (Listof Number)]
   [Add  MUWAE MUWAE]
   [Sub  MUWAE MUWAE]
   [Mul  MUWAE MUWAE]
@@ -28,7 +28,7 @@
 ;; to convert s-expressions into MUWAEs
 (define (parse-sexpr sexpr)
   (match sexpr
-    [(number: n)    (Num n)]
+    [(number: n)    (Num (list n))]
     [(symbol: name) (Id name)]
     [(cons 'with more)
      (match sexpr
@@ -99,15 +99,18 @@
 ;; evaluates MUWAE expressions by reducing them to numbers
 (define (eval expr)
   (cases expr
-    [(Num n) (list n)]
+    [(Num n) n]
     [(Add l r) (bin-op + (eval l) (eval r))]
     [(Sub l r) (bin-op - (eval l) (eval r))]
     [(Mul l r) (bin-op * (eval l) (eval r))]
-    [(Div l r) (bin-op / (eval l) (eval r))]
+    [(Div l r) (let ([er (eval r)])
+                 (if (ormap zero? er)
+                     (error 'eval "Can't divide by zero")
+                     (bin-op / (eval l) er)))]
     [(With bound-id named-expr bound-body)
      (eval (subst bound-body
                   bound-id
-                  (Num (first (eval named-expr)))))]
+                  (Num (eval named-expr))))]
     [(Id name) (error 'eval "free identifier: ~s" name)]
     [(Sqrt e) (sqrt+ (eval e))]))
 
@@ -162,7 +165,6 @@
 (test (run "{with {x {* 5 5}} {sqrt x}}") => '(5 -5))
 (test (run "{sqrt 9}") => '(3 -3))
 (test (run "{sqrt 0}") => '(0 0))
-(test (run "{with {x {/ 36 {sqrt 625}}} {sqrt x}}") => '(6/5 -6/5))
 (test (run "{with {x {/ 36 25}} {sqrt x}}") => '(6/5 -6/5))
 (test (run "{+ {sqrt 1} 3}") => '(4 2))
 (test (run "{+ {/ {+ {sqrt 1} 3} 2} {sqrt 100}}") => '(12 -8 11 -9))
@@ -172,5 +174,6 @@
 (test (run "{sqrt -1}") =error> "`sqrt' requires a non-negative input")
 (test (run "{with}") =error> "bad `with' syntax")
 (test (run "{with {x {+5 5}} {+ x x}}") =error> "bad syntax in (5 5)")
+(test (run "{with {x 0} {/ 10 x}}") =error> "Can't divide by zero")
 
-(define minutes-spent 300)
+(define minutes-spent 440)
