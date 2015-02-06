@@ -2,7 +2,8 @@
 ;; Complete Coverage: finished, cannot cover 'eval-number' error now
 ;; In Progress :: Fixing Arithmetics
 ;;                operators behave like they do in racket
-;;                TODO :: Make them robust
+;;                made them robust
+;;                TODO :: add more cornor tests
 ;; TODO :: Adding Booleans and Conditionals
 ;; TODO :: Further Extensions
 
@@ -139,12 +140,24 @@
 (define (eval expr)
   (cases expr
     [(Num n) n]
-    [(Add args) (foldl + 0 (map eval-number args))]
-    [(Mul args) (foldl * 1 (map eval-number args))]
-    [(Sub fst args) (- (eval-number fst)
-                       (foldl + 0 (map eval-number args)))]
-    [(Div fst args) (/ (eval-number fst)
-                       (foldl * 1 (map eval-number args)))]
+    [(Add args) (if (null? args)
+                    (error 'eval "no arguments for addition")
+                    (foldl + 0 (map eval-number args)))]
+    [(Mul args) (if (null? args)
+                    (error 'eval "no arguments for multiplication")
+                    (foldl * 1 (map eval-number args)))]
+    [(Sub fst args) (if (null? args)
+                        (error 'eval "one arguments for subtraction")
+                        (- (eval-number fst)
+                           (foldl + 0 (map eval-number args))))]
+    [(Div fst args) (let ([largs (map eval-number args)])
+                      (cond
+                       [(null? args)
+                        (error 'eval "one arguments for division")]
+                       [(ormap zero? largs)
+                       (error 'eval "cannot divide by zero")]
+                      [else (/ (eval-number fst)
+                               (foldl * 1 largs))]))]
     [(With bound-id named-expr bound-body)
      (eval (subst bound-body
                   bound-id
@@ -181,8 +194,13 @@
       =error> "bad syntax in (bleh)")
 
 ;; test for fixing arithmetics
-;; currently not robust
+;; may have some cornor cases untested
 (test (run "{+ 1 2 3 4}") => 10)
 (test (run "{- 10 1 2 3}") => 4)
 (test (run "{* 1 2 3 4}") => 24)
 (test (run "{/ 20 2 5}") => 2)
+(test (run "{+}") =error> "no arguments for addition")
+(test (run "{*}") =error> "no arguments for multiplication")
+(test (run "{- 5}") =error> "one arguments for subtraction")
+(test (run "{/ 10}") =error> "one arguments for division")
+(test (run "{/ 100 2 4 5 0}") =error> "cannot divide by zero")
