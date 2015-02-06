@@ -1,6 +1,8 @@
 ;; Skeleton of Algae
 ;; Complete Coverage: finished, cannot cover 'eval-number' error now
-;; TODO :: Fixing Arithmetics
+;; In Progress :: Fixing Arithmetics
+;;                operators behave like they do in racket
+;;                TODO :: Make them robust
 ;; TODO :: Adding Booleans and Conditionals
 ;; TODO :: Further Extensions
 
@@ -137,14 +139,12 @@
 (define (eval expr)
   (cases expr
     [(Num n) n]
-    [(Add args) (+ (eval-number (first args))
-                   (eval-number (second args)))]
-    [(Mul args) (* (eval-number (first args))
-                   (eval-number (second args)))]
+    [(Add args) (foldl + 0 (map eval-number args))]
+    [(Mul args) (foldl * 1 (map eval-number args))]
     [(Sub fst args) (- (eval-number fst)
-                       (eval-number (first args)))]
+                       (foldl + 0 (map eval-number args)))]
     [(Div fst args) (/ (eval-number fst)
-                       (eval-number (first args)))]
+                       (foldl * 1 (map eval-number args)))]
     [(With bound-id named-expr bound-body)
      (eval (subst bound-body
                   bound-id
@@ -171,7 +171,7 @@
 (test (run "{with {x 5} {with {x x} x}}") => 5)
 
 
-;; new test for complete coverage
+;; test for complete coverage
 (test (run "{with {x 20} {with {y 10}{/ x {* y 2}}}}") => 1)
 (test (run "{with {x 20} {* x y}}")
       =error> "free identifier: y")
@@ -179,3 +179,10 @@
       =error> "bad `with' syntax in (with x 5 (+ x x))")
 (test (run "{bleh}")
       =error> "bad syntax in (bleh)")
+
+;; test for fixing arithmetics
+;; currently not robust
+(test (run "{+ 1 2 3 4}") => 10)
+(test (run "{- 10 1 2 3}") => 4)
+(test (run "{* 1 2 3 4}") => 24)
+(test (run "{/ 20 2 5}") => 2)
