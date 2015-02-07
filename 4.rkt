@@ -201,18 +201,14 @@
 (define (And expr1 expr2)
   (If (Not expr1)
       (Bool #f)
-      (If expr2
-          (Bool #t)
-          (Bool #f))))
+      expr2))
 
 (: Or : ALGAE ALGAE -> ALGAE)
 ;; fake binding for Or
 (define (Or expr1 expr2)
   (If expr1
       (Bool #t)
-      (If expr2
-          (Bool #t)
-          (Bool #f))))
+      expr2))
 
 (: value->algae : (U Number Boolean) -> ALGAE)
 ;; converts a value to an ALGAE value (so it can be used with `subst')
@@ -323,7 +319,8 @@
                   {if {= x {+ 3 9}}
                       {< x 20}
                       {= x 11}}}") => #f)
-(test (run "{and {with {x 1} {= x {/ 5 2}}} {/ 5 0}}") => #f)
+(test (run "{and True 123}") => 123)
+(test (run "{and {with {x 1} {= x {/ 5 2}}} {/ 5 0}}") => #F)
 (test (run "{or {not False} {/ 5 0}}") => #t)
 (test (run "{and True {< 1 0}}") => #f)
 (test (run "{or {not True} {and True {< 1 0}}}") => #f)
