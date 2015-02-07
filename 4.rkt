@@ -4,18 +4,22 @@
 ;;            operators behave like they do in racket
 ;;            made them robust
 ;;            TODO :: add more cornor tests
-;; In Progress :: Adding Booleans and Conditionals
-;;                Entend the Algea BNF
-;;                Add new variants to the ALGAE type definition
-;;                Extend parse-sexpr
-;;                Update subst and eval
-;;                Change eval type
-;;                Update value-algae
-;;                Extend BNF
-;;                Change subst and eval again
-;;                Add eval-boolean
-;;                Complete Coverage for boolean, need more corner tests
-;; TODO :: Further Extensions
+;; Adding Booleans and Conditionals
+;;            Entend the Algea BNF
+;;            Add new variants to the ALGAE type definition
+;;            Extend parse-sexpr
+;;            Update subst and eval
+;;            Change eval type
+;;            Update value-algae
+;;            Extend BNF
+;;            Change subst and eval again
+;;            Add eval-boolean
+;;            Complete Coverage for boolean, need more corner tests
+;; Further Extensions
+;;            Extend BNF
+;;            Modify Parser
+;;            Fake binding
+;;            TODO :: Update the formal spec
 
 #lang pl 04
 
@@ -33,6 +37,9 @@
                | True
                | False
                | { if <ALGEA> <ALGEA> <ALGAE>}
+               | { not <ALGEA>}
+               | { and <ALGEA> <ALGEA>}
+               | { or  <ALGEA> <ALGEA>}
 |#
 
 ;; ALGAE abstract syntax trees
@@ -81,6 +88,9 @@
                                      (parse-sexpr rest)
                                      (parse-sexpr resf))]
        [else (error `parse-sexpr "bad `if' syntax in ~s" sexpr)])]
+    [(list 'not arg) (Not (parse-sexpr arg))]
+    [(list 'and arg1 arg2) (And (parse-sexpr arg1) (parse-sexpr arg2))]
+    [(list 'or arg1 arg2) (Or (parse-sexpr arg1) (parse-sexpr arg2))]
     [else (error 'parse-sexpr "bad syntax in ~s" sexpr)]))
 
 (: parse : String -> ALGAE)
@@ -158,6 +168,9 @@
                         = E2 if eval(B) is false
      eval({with {x E1} E2}) = eval(E2[eval(E1)/x])
      evalN(E) = eval(E) if it is a number, error otherwise
+     eval({not E})      = eval({if E False True})
+     eval({and E1 E2})  = eval()
+     eval({or E1 E2})   = eval()
 |#
 
 (: eval-number : ALGAE -> Number)
@@ -177,6 +190,29 @@
         result
         (error 'eval-boolean "need a boolean when evaluating ~s, but got ~s"
                expr result))))
+
+(: Not : ALGAE -> ALGAE)
+;; fake binding for Not: translate to actual syntax
+(define (Not expr)
+  (If expr (Bool #f) (Bool #t)))
+
+(: And : ALGAE ALGAE -> ALGAE)
+;; fake binding for And
+(define (And expr1 expr2)
+  (If (Not expr1)
+      (Bool #f)
+      (if expr2
+          (Bool #t)
+          (Bool #f))))
+
+(: Or : ALGAE ALGAE -> ALGAE)
+;; fake binding for Or
+(define (Or expr1 expr2)
+  (If expr1
+      (Bool #t)
+      (if expr2
+          (Bool #t)
+          (Bool #f))))
 
 (: value->algae : (U Number Boolean) -> ALGAE)
 ;; converts a value to an ALGAE value (so it can be used with `subst')
@@ -288,6 +324,8 @@
                   {if {= x {+ 3 9}}
                       {< x 20}
                       {= x 11}}}") => #f)
+(test (run "{and {with {x 1} {= x {/ 5 2}}} {/ 5 0}}") => #f)
+(test (run "{or {not False} {/ 5 0}}") => #t)
 (test (run "{if {+ 5 2} 10 20}")
       =error> "need a boolean when evaluating (Add ((Num 5) (Num 2))), but got 7")
 (test (run "{< 5 {< 1 2}}")
