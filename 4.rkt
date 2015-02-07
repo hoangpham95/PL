@@ -201,7 +201,7 @@
 (define (And expr1 expr2)
   (If (Not expr1)
       (Bool #f)
-      (if expr2
+      (If expr2
           (Bool #t)
           (Bool #f))))
 
@@ -210,7 +210,7 @@
 (define (Or expr1 expr2)
   (If expr1
       (Bool #t)
-      (if expr2
+      (If expr2
           (Bool #t)
           (Bool #f))))
 
@@ -317,7 +317,6 @@
 (test (run "{< 5 3}") => #f)
 (test (run "{< 1 2}") => #t)
 (test (run "{= {with {x 5} x} {with {x 6} {- x 1}}}") => #t)
-(test (run "{if True {with {x 5} x} {with {x 10} x}}") => 5)
 (test (run "{if False {with {x 5} {< x 10}} {with {x 10} {<= x 10}}}") => #t)
 (test (run "{with {x True} {if x True False}}") => #t)
 (test (run "{with {x 10}
@@ -326,8 +325,13 @@
                       {= x 11}}}") => #f)
 (test (run "{and {with {x 1} {= x {/ 5 2}}} {/ 5 0}}") => #f)
 (test (run "{or {not False} {/ 5 0}}") => #t)
+(test (run "{and True {< 1 0}}") => #f)
+(test (run "{or {not True} {and True {< 1 0}}}") => #f)
 (test (run "{if {+ 5 2} 10 20}")
       =error> "need a boolean when evaluating (Add ((Num 5) (Num 2))), but got 7")
 (test (run "{< 5 {< 1 2}}")
       =error> "need a number when evaluating (Less (Num 1) (Num 2)), but got #t")
 (test (run "{if bleh}") =error> "bad `if' syntax in (if bleh)")
+
+
+(define minutes-spent 300)
