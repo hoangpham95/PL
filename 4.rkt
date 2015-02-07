@@ -14,6 +14,7 @@
 ;;                Extend BNF
 ;;                Change subst and eval again
 ;;                Add eval-boolean
+;;                Complete Coverage for boolean, need more corner tests
 ;; TODO :: Further Extensions
 
 #lang pl 04
@@ -275,11 +276,20 @@
 
 
 ;; test for boolean
+(test (run "True") => #t)
+(test (run "False") => #f)
 (test (run "{< 5 3}") => #f)
 (test (run "{< 1 2}") => #t)
 (test (run "{= {with {x 5} x} {with {x 6} {- x 1}}}") => #t)
 (test (run "{if True {with {x 5} x} {with {x 10} x}}") => 5)
+(test (run "{if False {with {x 5} {< x 10}} {with {x 10} {<= x 10}}}") => #t)
+(test (run "{with {x True} {if x True False}}") => #t)
+(test (run "{with {x 10}
+                  {if {= x {+ 3 9}}
+                      {< x 20}
+                      {= x 11}}}") => #f)
 (test (run "{if {+ 5 2} 10 20}")
       =error> "need a boolean when evaluating (Add ((Num 5) (Num 2))), but got 7")
 (test (run "{< 5 {< 1 2}}")
       =error> "need a number when evaluating (Less (Num 1) (Num 2)), but got #t")
+(test (run "{if bleh}") =error> "bad `if' syntax in (if bleh)")
