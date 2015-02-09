@@ -3,7 +3,8 @@
 ;; Fixing Arithmetics
 ;;            operators behave like they do in racket
 ;;            made them robust
-;;            TODO :: add more cornor tests
+;;            fixed operators
+;;            added more corner cases
 ;; Adding Booleans and Conditionals
 ;;            Entend the Algea BNF
 ;;            Add new variants to the ALGAE type definition
@@ -75,10 +76,14 @@
        [else (error 'parse-sexpr "bad `with' syntax in ~s" sexpr)])]
     [(list '+ (sexpr: args) ...) (Add (parse-sexprs args))]
     [(list '* (sexpr: args) ...) (Mul (parse-sexprs args))]
-    [(list '- fst (sexpr: args) ...)
-     (Sub (parse-sexpr fst) (parse-sexprs args))]
-    [(list '/ fst (sexpr: args) ...)
-     (Div (parse-sexpr fst) (parse-sexprs args))]
+    [(list '- (sexpr: args) ...) 
+     (if (null? args)
+         (error 'parse-sexpr "need at least one argument for -")
+         (Sub (parse-sexpr (first args)) (parse-sexprs (rest args))))]
+    [(list '/ (sexpr: args) ...) 
+     (if (null? args)
+         (error 'parse-sexpr "need at least one argument for /")
+          (Div (parse-sexpr (first args)) (parse-sexprs (rest args))))]
     [(list '< lhs rhs) (Less (parse-sexpr lhs) (parse-sexpr rhs))]
     [(list '= lhs rhs) (Equal (parse-sexpr lhs) (parse-sexpr rhs))]
     [(list '<= lhs rhs) (LessEq (parse-sexpr lhs) (parse-sexpr rhs))]
@@ -146,8 +151,8 @@
      (With bound-id
            (subst* named-expr)
            (if (eq? bound-id from)
-             bound-body
-             (subst* bound-body)))]))
+               bound-body
+               (subst* bound-body)))]))
 
 #| Formal specs for `eval':
      eval(N)            = N
@@ -178,9 +183,9 @@
 (define (eval-number expr)
   (let ([result (eval expr)])
     (if (number? result)
-      result
-      (error 'eval-number "need a number when evaluating ~s, but got ~s"
-             expr result))))
+        result
+        (error 'eval-number "need a number when evaluating ~s, but got ~s"
+               expr result))))
 
 (: eval-boolean : ALGAE -> Boolean)
 ;; helper for `eval': verifies that the result is a boolean
@@ -235,24 +240,20 @@
   (cases expr
     [(Num n) n]
     [(Bool b) b]
-    [(Add args) (if (null? args)
-                    (error 'eval "no arguments for addition")
-                    (foldl + 0 (map eval-number args)))]
-    [(Mul args) (if (null? args)
-                    (error 'eval "no arguments for multiplication")
-                    (foldl * 1 (map eval-number args)))]
+    [(Add args) (foldl + 0 (map eval-number args))]
+    [(Mul args) (foldl * 1 (map eval-number args))]
     [(Sub fst args) (if (null? args)
-                        (error 'eval "one arguments for subtraction")
+                        (- (eval-number fst))
                         (- (eval-number fst)
                            (foldl + 0 (map eval-number args))))]
-    [(Div fst args) (let ([largs (map eval-number args)])
+    [(Div fst args) (let ([eargs (map eval-number args)]
+                          [efst (eval-number fst)])
                       (cond
-                       [(null? args)
-                        (error 'eval "one arguments for division")]
-                       [(ormap zero? largs)
-                       (error 'eval "cannot divide by zero")]
-                      [else (/ (eval-number fst)
-                               (foldl * 1 largs))]))]
+                        [(ormap zero? (cons efst eargs))
+                         (error 'eval "cannot divide by zero")]
+                        [(null? args)
+                         (/ efst)]
+                        [else (/ efst (foldl * 1 eargs))]))]
     [(Less lhs rhs) (< (eval-number lhs) (eval-number rhs))]
     [(Equal lhs rhs) (= (eval-number lhs) (eval-number rhs))]
     [(LessEq lhs rhs) (<= (eval-number lhs) (eval-number rhs))]
@@ -300,12 +301,16 @@
 (test (run "{- 10 1 2 3}") => 4)
 (test (run "{* 1 2 3 4}") => 24)
 (test (run "{/ 20 2 5}") => 2)
-(test (run "{+}") =error> "no arguments for addition")
-(test (run "{*}") =error> "no arguments for multiplication")
-(test (run "{- 5}") =error> "one arguments for subtraction")
-(test (run "{/ 10}") =error> "one arguments for division")
+(test (run "{+}") => 0)
+(test (run "{+ 1}") => 1)
+(test (run "{*}") => 1)
+(test (run "{* 5}") => 5)
+(test (run "{- 5}") => -5)
+(test (run "{/ 10}") => 1/10)
+(test (run "{-}") =error> "need at least one argument for -")
+(test (run "{/}") =error> "need at least one argument for /")
+(test (run "{/ 0}") =error> "cannot divide by zero")
 (test (run "{/ 100 2 4 5 0}") =error> "cannot divide by zero")
-
 
 ;; test for boolean
 (test (run "True") => #t)
@@ -325,9 +330,11 @@
 (test (run "{and True {< 1 0}}") => #f)
 (test (run "{or {not True} {and True {< 1 0}}}") => #f)
 (test (run "{if {+ 5 2} 10 20}")
-      =error> "need a boolean when evaluating (Add ((Num 5) (Num 2))), but got 7")
+      =error> (string-append "need a boolean when evaluating (Add ((Num 5) " 
+                             "(Num 2))), but got 7"))
 (test (run "{< 5 {< 1 2}}")
-      =error> "need a number when evaluating (Less (Num 1) (Num 2)), but got #t")
+      =error> (string-append "need a number when evaluating (Less (Num 1) " 
+                             "(Num 2)), but got #t"))
 (test (run "{if bleh}") =error> "bad `if' syntax in (if bleh)")
 
 
