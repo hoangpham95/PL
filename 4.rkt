@@ -6,7 +6,7 @@
 ;;            fixed operators
 ;;            added more corner cases
 ;; Adding Booleans and Conditionals
-;;            Entend the Algea BNF
+;;            Entend the ALGAE BNF
 ;;            Add new variants to the ALGAE type definition
 ;;            Extend parse-sexpr
 ;;            Update subst and eval
@@ -31,16 +31,16 @@
                | { - <ALGAE> <ALGAE> ... }
                | { / <ALGAE> <ALGAE> ... }
                | { with { <id> <ALGAE> } <ALGAE> }
-               | { < <ALGAE>}
-               | { = <ALGAE>}
-               | { <= <ALGAE>}
+               | { < <ALGAE> <ALGAE> }
+               | { = <ALGAE> <ALGAE> }
+               | { <= <ALGAE> <ALGAE> }
                | <id>
                | True
                | False
-               | { if <ALGEA> <ALGEA> <ALGAE>}
-               | { not <ALGEA>}
-               | { and <ALGEA> <ALGEA>}
-               | { or  <ALGEA> <ALGEA>}
+               | { if <ALGAE> <ALGAE> <ALGAE> }
+               | { not <ALGAE> }
+               | { and <ALGAE> <ALGAE> }
+               | { or  <ALGAE> <ALGAE> }
 |#
 
 ;; ALGAE abstract syntax trees
@@ -104,18 +104,19 @@
   (parse-sexpr (string->sexpr str)))
 
 #| Formal specs for `subst':
-   (`N' is a <num>, `E1', `E2' are <ALGAE>s, `x' is some <id>, `y' is a
-   *different* <id>, `B')
+   (`N' is a <num>, `E', `E1', `E2', etc. are <ALGAE>s, `x' is some <id>,
+   `y' is a *different* <id>, `B' is a True/False)
       N[v/x]                = N
+      B[v/x]                = B
       {+ E ...}[v/x]        = {+ E[v/x] ...}
       {* E ...}[v/x]        = {* E[v/x] ...}
       {- E1 E ...}[v/x]     = {- E1[v/x] E[v/x] ...}
       {/ E1 E ...}[v/x]     = {/ E1[v/x] E[v/x] ...}
-      {< E1 E2}[v/x]        = {< E1 E2}
-      {= E1 E2}[v/x]        = {= E1 E2}
-      {<= E1 E2}[v/x]       = {<= E1 E2}
-      {if B E1 E2}[v/x]     = E1 if B is True
-                            = E2 else
+      {< E1 E2}[v/x]        = {< E1[v/x] E2[v/x]}
+      {= E1 E2}[v/x]        = {= E1[v/x] E2[v/x]}
+      {<= E1 E2}[v/x]       = {<= E1[v/x] E2[v/x]}
+      {if E1 E2 E3}[v/x]    = E2[v/x] if E1[v/x] is True
+                            = else E3[v/x]
       y[v/x]                = y
       x[v/x]                = v
       {with {y E1} E2}[v/x] = {with {y E1[v/x]} E2[v/x]}
@@ -155,27 +156,37 @@
                (subst* bound-body)))]))
 
 #| Formal specs for `eval':
-     eval(N)            = N
-     eval({+ E ...})    = evalN(E) + ...
-     eval({* E ...})    = evalN(E) * ...
-     eval({- E})        = -evalN(E)
-     eval({/ E})        = 1/evalN(E)
-     eval({- E1 E ...}) = evalN(E1) - (evalN(E) + ...)
-     eval({/ E1 E ...}) = evalN(E1) / (evalN(E) * ...)
-     eval({< E1 E2})    = true if eval(E1) < eval(E2)
-                        = false else
-     eval({= E1 E2})    = true if eval(E1) = eval(E2)
-                        = false else
-     eval({<= E1 E2})   = true if eval(E1) <= eval(E2)
-                        = false else
-     eval(id)           = error!
-     eval({if B E1 E2}) = E1 if eval(B) is true
-                        = E2 if eval(B) is false
+   (`N' is a <num>, `E', `E1', `E2', etc. are <ALGAE>s, `x' is some <id>,
+   `B' is a True/False)
+     eval(N)                = N
+     eval({+ E ...})        = evalN(E) + ...
+     eval({* E ...})        = evalN(E) * ...
+     eval({- E})            = -evalN(E)
+     eval({/ E})            = 1/evalN(E)
+     eval({- E1 E ...})     = evalN(E1) - (evalN(E) + ...)
+     eval({/ E1 E ...})     = evalN(E1) / (evalN(E) * ...)
+     eval({< E1 E2})        = error if either evalN(E1) or evalN(E2) is not a 
+                              number
+                            = true if evalN(E1) < evalN(E2)
+                            = else false
+     eval({= E1 E2})        = error if either evalN(E1) or evalN(E2) is not a 
+                              number
+                            = true if evalN(E1) = evalN(E2)
+                            = else false
+     eval({<= E1 E2})       = error if either evalN(E1) or evalN(E2) is not a 
+                              number
+                            = true if evalN(E1) <= evalN(E2)
+                            = else false
+     eval(id)               = error!
+     eval({if E1 E2 E3})    = eval(E1) if evalB(E1) is true
+                            = eval(E2) if evalB(E1) is false
+                            = else error!
      eval({with {x E1} E2}) = eval(E2[eval(E1)/x])
-     evalN(E) = eval(E) if it is a number, error otherwise
-     eval({not E})      = eval({if E False True})
-     eval({and E1 E2})  = eval()
-     eval({or E1 E2})   = eval()
+     evalN(E)               = eval(E) if it is a number, error otherwise
+     evalB(E)               = eval(E) if it is a boolean, error otherwise
+     eval({not E})          = eval({if E False True})
+     eval({and E1 E2})      = eval({if {not E1} True E2})
+     eval({or E1 E2})       = eval({if E1 True E2)
 |#
 
 (: eval-number : ALGAE -> Number)
