@@ -1,27 +1,3 @@
-;; Skeleton of Algae
-;; Complete Coverage: finished, cannot cover 'eval-number' error now
-;; Fixing Arithmetics
-;;            operators behave like they do in racket
-;;            made them robust
-;;            fixed operators
-;;            added more corner cases
-;; Adding Booleans and Conditionals
-;;            Entend the ALGAE BNF
-;;            Add new variants to the ALGAE type definition
-;;            Extend parse-sexpr
-;;            Update subst and eval
-;;            Change eval type
-;;            Update value-algae
-;;            Extend BNF
-;;            Change subst and eval again
-;;            Add eval-boolean
-;;            Complete Coverage for boolean, need more corner tests
-;; Further Extensions
-;;            Extend BNF
-;;            Modify Parser
-;;            Fake binding
-;;            TODO :: Update the formal spec
-
 #lang pl 04
 
 #| BNF for the ALGAE language:
@@ -159,6 +135,7 @@
    (`N' is a <num>, `E', `E1', `E2', etc. are <ALGAE>s, `x' is some <id>,
    `B' is a True/False)
      eval(N)                = N
+     eval(B)                = B
      eval({+ E ...})        = evalN(E) + ...
      eval({* E ...})        = evalN(E) * ...
      eval({- E})            = -evalN(E)
