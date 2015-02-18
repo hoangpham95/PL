@@ -35,8 +35,8 @@ Evaluation rules:
   [Div  BRANG BRANG]
   [Id   Symbol]
   [With Symbol BRANG BRANG]
-  [Fun  Symbol BRANG]
-  [Call BRANG BRANG])
+  [Fun  (Listof Symbol) BRANG]
+  [Call BRANG (Listof BRANG)])
 
 (define-type CORE
   [CNum  Number]
@@ -45,7 +45,6 @@ Evaluation rules:
   [CMul  CORE CORE]
   [CDiv  CORE CORE]
   [CRef  Natural]
-  [CWith CORE CORE]
   [CFun  CORE]
   [CCall CORE CORE])
 
@@ -62,14 +61,16 @@ Evaluation rules:
        [else (error 'parse-sexpr "bad `with' syntax in ~s" sexpr)])]
     [(cons 'fun more)
      (match sexpr
-       [(list 'fun (list (symbol: name)) body)
-        (Fun name (parse-sexpr body))]
+       [(list 'fun (list (symbol: name) (symbol: names) ...) body)
+        (Fun (cons name names) (parse-sexpr body) )]
        [else (error 'parse-sexpr "bad `fun' syntax in ~s" sexpr)])]
     [(list '+ lhs rhs) (Add (parse-sexpr lhs) (parse-sexpr rhs))]
     [(list '- lhs rhs) (Sub (parse-sexpr lhs) (parse-sexpr rhs))]
     [(list '* lhs rhs) (Mul (parse-sexpr lhs) (parse-sexpr rhs))]
     [(list '/ lhs rhs) (Div (parse-sexpr lhs) (parse-sexpr rhs))]
-    [(list 'call fun arg) (Call (parse-sexpr fun) (parse-sexpr arg))]
+    [(list 'call fun arg more ...) (Call (parse-sexpr fun)
+                                         (cons (parse-sexpr arg)
+                                               (map parse-sexpr more)))]
     [else (error 'parse-sexpr "bad syntax in ~s" sexpr)]))
 
 (: parse : String -> BRANG)
@@ -123,11 +124,30 @@ Evaluation rules:
          [(Div l r)  (CDiv (preprocess l env) (preprocess r env))]
          [(Id name)  (CRef (env name))]
          [(With bound-id name-expr bound-body)
-          (CWith (preprocess name-expr env) (preprocess bound-body (de-extend env bound-id)))]
-         [(Fun bound-id bound-body)
-          (CFun (preprocess bound-body (de-extend env bound-id)))]
-         [(Call fun-expr arg-expr)
-          (CCall (preprocess fun-expr env) (preprocess arg-expr env))]))
+          (CCall (CFun (preprocess bound-body
+                                   (de-extend env bound-id)))
+                 (preprocess name-expr env))]
+         [(Fun bound-ids bound-body)
+          (currify
+           (preprocess bound-body
+                       (foldl
+                        (lambda ([id : Symbol] [e : DE-ENV])
+                          (de-extend e id))
+                        env
+                        bound-ids))
+           bound-ids)]
+         [(Call fun-expr arg-exprs)
+          (foldl
+           (lambda ([arg : BRANG] [cfun-expr : CORE])
+             (CCall cfun-expr (preprocess arg env)))
+           (preprocess fun-expr env)
+           arg-exprs)]))
+
+(: currify : CORE (Listof Symbol) -> CORE)
+(define (currify expr ids)
+  (if (null? ids)
+      expr
+      (CFun (currify expr (cdr ids)))))
 
 (: eval : CORE ENV -> VAL)
 ;; evaluates BRANG expressions by reducing them to values
@@ -138,9 +158,6 @@ Evaluation rules:
     [(CSub l r) (arith-op - (eval l env) (eval r env))]
     [(CMul l r) (arith-op * (eval l env) (eval r env))]
     [(CDiv l r) (arith-op / (eval l env) (eval r env))]
-    [(CWith named-expr bound-body)
-     (eval bound-body
-           (cons (eval named-expr env) env))]
     [(CRef N) (list-ref env N)]
     [(CFun bound-body)
      (FunV bound-body env)]
@@ -191,3 +208,5 @@ Evaluation rules:
                         {fun {x} {fun {y} {+ x y}}}}
                   123}")
       => 124)
+(test (run "{call {fun {x y} {+ x y}} 1 2}")
+      => 3)
