@@ -53,8 +53,8 @@
   [LessEq ALGAE ALGAE]
   [If     ALGAE ALGAE ALGAE]
   [Call   Symbol ALGAE]
-  [Quote Symbol]
-  [VCall ALGAE ALGAE])
+  [Quote  Symbol]
+  [VCall  ALGAE ALGAE])
 
 ;; runtime values
 (define-type VAL = (U Number Boolean Symbol))
