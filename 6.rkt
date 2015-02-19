@@ -9,8 +9,8 @@ The grammar:
             | { / <BRANG> <BRANG> }
             | { with { <id> <BRANG> } <BRANG> }
             | <id>
-            | { fun { <id> } <BRANG> }
-            | { call <BRANG> <BRANG> }
+            | { fun { <id> ... } <BRANG> }
+            | { call <BRANG> <BRANG> ... }
 
 Evaluation rules:
   eval(N,env)                = N
@@ -128,7 +128,7 @@ Evaluation rules:
                                    (de-extend env bound-id)))
                  (preprocess name-expr env))]
          [(Fun bound-ids bound-body)
-          (currify
+          (currify-CFun
            (preprocess bound-body
                        (foldl
                         (lambda ([id : Symbol] [e : DE-ENV])
@@ -137,17 +137,24 @@ Evaluation rules:
                         bound-ids))
            bound-ids)]
          [(Call fun-expr arg-exprs)
-          (foldl
-           (lambda ([arg : BRANG] [cfun-expr : CORE])
-             (CCall cfun-expr (preprocess arg env)))
-           (preprocess fun-expr env)
-           arg-exprs)]))
+          (currify-CCall (preprocess fun-expr env)
+                         arg-exprs
+                         env)]))
 
-(: currify : CORE (Listof Symbol) -> CORE)
-(define (currify expr ids)
+;; currify hepler for Fun and Call
+;; there should be a unified currify function
+(: currify-CFun : CORE (Listof Symbol) -> CORE)
+(define (currify-CFun expr ids)
   (if (null? ids)
       expr
-      (CFun (currify expr (cdr ids)))))
+      (CFun (currify-CFun expr (cdr ids)))))
+
+(: currify-CCall : CORE (Listof BRANG) DE-ENV -> CORE)
+(define (currify-CCall cfun-expr arg-exprs env)
+  (if (null? arg-exprs)
+      cfun-expr
+      (CCall (currify-CCall cfun-expr (cdr arg-exprs) env)
+             (preprocess (car arg-exprs) env))))
 
 (: eval : CORE ENV -> VAL)
 ;; evaluates BRANG expressions by reducing them to values
@@ -181,6 +188,9 @@ Evaluation rules:
 
 ;; tests
 (test (run "{+ 5 5}") => 10)
+(test (run "{- 9 5}") => 4)
+(test (run "{* 2 5}") => 10)
+(test (run "{/ 10 2}") => 5)
 (test (run "{call {fun {x} {+ x 1}} 4}")
       => 5)
 (test (run "{with {add3 {fun {x} {+ x 3}}}
@@ -210,3 +220,16 @@ Evaluation rules:
       => 124)
 (test (run "{call {fun {x y} {+ x y}} 1 2}")
       => 3)
+(test (run "{bleh}") =error> "bad syntax in (bleh)")
+(test (run "{with {x 3} {+ 10 y}}")
+      =error> "no binding for y")
+(test (run "{with {x 3}}")
+      =error> "bad `with' syntax in (with (x 3))")
+(test (run "{fun {x y} {+ x y} {+ x y}}")
+      =error> "bad `fun' syntax in (fun (x y) (+ x y) (+ x y))")
+(test (run "{+ 1 {fun {x} {+ 1 2}}}")
+      =error> "expected a number, got: (FunV (CAdd (CNum 1) (CNum 2)) ())")
+(test (run "{call {+ 1 2} 3}")
+      =error> "`call' expects a function, got: (NumV 3)")
+(test (run "{fun {x} {+ 1 2}}")
+      =error> "evaluation returned a non-number: (FunV (CAdd (CNum 1) (CNum 2)) ())")
