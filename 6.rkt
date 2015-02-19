@@ -128,21 +128,21 @@ Evaluation rules:
                                    (de-extend env bound-id)))
                  (preprocess name-expr env))]
          [(Fun bound-ids bound-body)
-          (currify-CFun
-           (preprocess bound-body
-                       (foldl
-                        (lambda ([id : Symbol] [e : DE-ENV])
-                          (de-extend e id))
-                        env
-                        bound-ids))
-           bound-ids)]
+           (currify-CFun
+            (preprocess bound-body
+                        (foldl
+                         (lambda ([id : Symbol] [e : DE-ENV])
+                           (de-extend e id))
+                         env
+                         bound-ids))
+            bound-ids)]
          [(Call fun-expr arg-exprs)
-          (currify-CCall (preprocess fun-expr env)
-                         arg-exprs
-                         env)]))
+           (currify-CCall
+            (preprocess fun-expr env)
+            arg-exprs
+            env)]))
 
 ;; currify hepler for Fun and Call
-;; there should be a unified currify function
 (: currify-CFun : CORE (Listof Symbol) -> CORE)
 (define (currify-CFun expr ids)
   (if (null? ids)
