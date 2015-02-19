@@ -437,7 +437,7 @@
 
 ;; Really bad tests used solely to get full coverage because we couldn't figure
 ;; out how to get some coverage.
-(test (run* "{vcall 1 2}")
+(test (run "{program {fun a {n} {+ 1 1}} {fun main {n} {vcall 1 2}}}" 1)
       =error> "need a symbol when evaluating (Num 1), but got 1")
 (test (run "{program {fun a {n} {+ 1 n}}
                      {fun main {n} {with {x {quote a}} {vcall x n}}}}" 'blah)
