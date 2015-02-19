@@ -117,6 +117,7 @@
 (: And : (Listof ALGAE) -> ALGAE)
 ;; Translates `{and E1 ...}' syntax to core Algae.
 (define (And args)
+  ;;Using nested ifs instead of cond for fst and rst are evaluated only once
   (if (null? args)
       (Bool #t)
       (let ([fst (first args)]
@@ -128,6 +129,7 @@
 (: Or : (Listof ALGAE) -> ALGAE)
 ;; Translates `{or E1 ...}' syntax to core Algae.
 (define (Or args)
+  ;;Using nested ifs instead of cond for fst and rst are evaluated only once
   (if (null? args)
       (Bool #f)
       (let ([fst (first args)]
@@ -172,7 +174,7 @@
     [(If cond then else)
      (If (subst* cond) (subst* then) (subst* else))]
     [(Call id expr) (Call id (subst* expr))]
-    [(Quote name) (if (eq? name from) to expr)]
+    [(Quote name) expr]
     [(VCall expr1 expr2) (VCall (subst* expr1) (subst* expr2))]))
 
 (: eval-number : ALGAE PROGRAM -> Number)
@@ -432,5 +434,7 @@
                                               {quote do_even}
                                               {quote do_odd}}
                                           n}}}}}}" 159) => 55)
-
+(test (run "{program {fun add1 {n} {+ 1 n}}
+                     {fun main {n} {vcall {quote add1}
+                                          {with {x n} x}}}}" 1) => 2)
 (define minutes-spent 420)
