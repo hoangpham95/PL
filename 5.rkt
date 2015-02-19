@@ -252,19 +252,19 @@
       [(LessEq lhs rhs) (<= (eval-number lhs) (eval-number rhs))]
       [(If cond then else) (eval (if (eval-boolean cond) then else))]
       [(Call id exp) (let ([fun (lookup-fun id prog)])
+                       (cases fun
+                         [(Fun id name body) 
+                          (eval (subst body
+                                       name
+                                       (value->algae (eval exp))))]))]
+      [(Quote id) id]
+      [(VCall id exp) (let ([fun (lookup-fun (eval-symbol id) prog)])
                         (cases fun
                           [(Fun id name body) 
                            (eval (subst body
                                         name
-                                        (value->algae (eval exp))))]))]
-      [(Quote id) id]
-      [(VCall id exp) (let ([fun (lookup-fun (eval-symbol id) prog)])
-                             (cases fun
-                               [(Fun id name body) 
-                                (eval (subst body
-                                             name
-                                             (value->algae 
-                                              (eval exp))))]))])))
+                                        (value->algae 
+                                         (eval exp))))]))])))
 
 (: lookup-fun : Symbol PROGRAM -> FUN)
 ;; looks up a FUN instance in a PROGRAM given its name
@@ -434,7 +434,11 @@
                                               {quote do_even}
                                               {quote do_odd}}
                                           n}}}}}}" 159) => 55)
-(test (run "{program {fun add1 {n} {+ 1 n}}
-                     {fun main {n} {vcall {quote add1}
-                                          {with {x n} x}}}}" 1) => 2)
+
+;; Really bad tests used solely to get full coverage because we couldn't figure
+;; out how to get some coverage.
+(test (run* "{vcall 1 2}")
+      =error> "need a symbol when evaluating (Num 1), but got 1")
+(test (value->algae 'what) => (Id 'what))
+
 (define minutes-spent 420)
