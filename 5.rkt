@@ -212,7 +212,7 @@
 (define (value->algae val)
   (cond [(number?  val) (Num val)]
         [(boolean? val) (Bool val)]
-        [(symbol? val) (Id val)]))
+        [(symbol? val) (Quote val)]))
 
 (: eval : ALGAE PROGRAM -> VAL)
 ;; evaluates ALGAE expressions by reducing them to numbers or booleans
@@ -434,13 +434,14 @@
                                               {quote do_even}
                                               {quote do_odd}}
                                           n}}}}}}" 159) => 55)
-
-;; Really bad tests used solely to get full coverage because we couldn't figure
-;; out how to get some coverage.
 (test (run "{program {fun a {n} {+ 1 1}} {fun main {n} {vcall 1 2}}}" 1)
       =error> "need a symbol when evaluating (Num 1), but got 1")
 (test (run "{program {fun a {n} {+ 1 n}}
-                     {fun main {n} {with {x {quote a}} {vcall x n}}}}" 'blah)
-      =error> "free identifier: blah")
+                     {fun main {n} {with {x {quote a}} {vcall x n}}}}" 1)
+      => 2)
+(test (run "{program {fun sq {n} {* n n}} 
+                     {fun main {n} {vcall {quote sq} n}}}" 2) => 4)
+(test (run "{program {fun a {n} {+ 1 n}}
+                     {fun main {n} {with {x {quote a}} {vcall x n}}}}" 5) => 6)
 
-(define minutes-spent 420)
+(define minutes-spent 480)
