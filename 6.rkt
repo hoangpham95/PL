@@ -233,3 +233,5 @@ Evaluation rules:
       =error> "`call' expects a function, got: (NumV 3)")
 (test (run "{fun {x} {+ 1 2}}")
       =error> "evaluation returned a non-number: (FunV (CAdd (CNum 1) (CNum 2)) ())")
+
+(define minutes-spent 420)
