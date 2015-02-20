@@ -34,7 +34,8 @@ Preprocess rules:
                                                         extend(env, x)))
                                             preprocess(E1,env)}}>
   preprocess({fun {x ...} E},env)  = <{CFun {x} {CFun {x_2} ...} E}
-  preprocess({call E1 E2 ...},env1)    = <{CCall {CCall {... E1} E2_n ...} E2_1}
+  preprocess({call E1 E2 ...},env1)
+                               = <{CCall {CCall {... E1} E2_n ...} E2_1}
 
 Evaluation rules:
   eval(N,env)                = N
@@ -256,6 +257,7 @@ Evaluation rules:
 (test (run "{call {+ 1 2} 3}")
       =error> "`call' expects a function, got: (NumV 3)")
 (test (run "{fun {x} {+ 1 2}}")
-      =error> "evaluation returned a non-number: (FunV (CAdd (CNum 1) (CNum 2)) ())")
+      =error> (string-append "evaluation returned a non-number: "
+                             "(FunV (CAdd (CNum 1) (CNum 2)) ())"))
 
 (define minutes-spent 420)
