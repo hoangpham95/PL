@@ -22,6 +22,20 @@ The grammar:
             | { fun { <id> ... } <CORE> }
             | { call <CORE> <CORE> ... }
 
+Preprocess rules:
+  preprocess(N, env)               = (Cnum n)
+  preprocess({+ E1 E2},env)        = preprocess(E1,env) + preprocess(E2,env)
+  preprocess({- E1 E2},env)        = preprocess(E1,env) - preprocess(E2,env)
+  preprocess({* E1 E2},env)        = preprocess(E1,env) * preprocess(E2,env)
+  preprocess({/ E1 E2},env)        = preprocess(E1,env) / preprocess(E2,env)
+  preprocess(id,env)               = list-ref(env,id)
+  preprocess({with {x E1} E2},env) = <{CCall{CFun
+                                            preprocess(E2,
+                                                        extend(env, x)))
+                                            preprocess(E1,env)}}>
+  preprocess({fun {x ...} E},env)  = <{CFun {x} {CFun {x_2} ...} E}
+  preprocess({call E1 E2 ...},env1)    = <{CCall {CCall {... E1} E2_n ...} E2_1}
+
 Evaluation rules:
   eval(N,env)                = N
   eval({+ E1 E2},env)        = eval(E1,env) + eval(E2,env)
@@ -29,7 +43,6 @@ Evaluation rules:
   eval({* E1 E2},env)        = eval(E1,env) * eval(E2,env)
   eval({/ E1 E2},env)        = eval(E1,env) / eval(E2,env)
   eval(CRef(0),env)          = list-ref(env,N)
-  eval({with {x E1} E2},env) = eval(E2,extend(eval(E1,env),env))
   eval({fun {x} E},env)      = <{fun {x} E}, env>
   eval({call E1 E2},env1)
            = eval(Ef,extend(eval(E2,env1),env2))
@@ -163,8 +176,9 @@ Evaluation rules:
 (define (currify-CCall cfun-expr arg-exprs env)
   (if (null? arg-exprs)
       cfun-expr
-      (CCall (currify-CCall cfun-expr (cdr arg-exprs) env)
-             (preprocess (car arg-exprs) env))))
+      (let ([arg-exprs (reverse arg-exprs)])
+        (CCall (currify-CCall cfun-expr (cdr arg-exprs) env)
+               (preprocess (car arg-exprs) env)))))
 
 (: eval : CORE ENV -> VAL)
 ;; evaluates BRANG expressions by reducing them to values
