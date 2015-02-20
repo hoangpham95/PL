@@ -9,8 +9,18 @@ The grammar:
             | { / <BRANG> <BRANG> }
             | { with { <id> <BRANG> } <BRANG> }
             | <id>
-            | { fun { <id> ... } <BRANG> }
-            | { call <BRANG> <BRANG> ... }
+            | { fun { <id> } <BRANG> }
+            | { call <BRANG> <BRANG> }
+
+   <CORE> ::= <num>
+            | { + <CORE> <CORE> }
+            | { - <CORE> <CORE> }
+            | { * <CORE> <CORE> }
+            | { / <CORE> <CORE> }
+            | { with { <id> <CORE> } <CORE> }
+            | <id>
+            | { fun { <id> ... } <CORE> }
+            | { call <CORE> <CORE> ... }
 
 Evaluation rules:
   eval(N,env)                = N
