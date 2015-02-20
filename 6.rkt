@@ -108,14 +108,16 @@ Evaluation rules:
   [NumV Number]
   [FunV CORE ENV])
 
-;; Types for DE_ENV, which map identifiers to integers
+;; Types for DE-ENV, which map identifiers to integers
 (define-type DE-ENV = Symbol -> Natural)
 
 (: de-empty-env : DE-ENV)
+;; empty DE-ENV, a vacuous mapping, always throws an error
 (define (de-empty-env id)
   (error 'de-empty-env "no binding for ~s" id))
 
 (: de-extend : DE-ENV Symbol -> DE-ENV)
+;; consumes a DE-ENV and a symbol and return the extended environment
 (define (de-extend env id)
   (lambda (x)
     (if (eq? x id)
@@ -153,7 +155,7 @@ Evaluation rules:
          [(Fun bound-ids bound-body)
            (currify-CFun
             (preprocess bound-body
-                        (foldl
+                        (foldr
                          (lambda ([id : Symbol] [e : DE-ENV])
                            (de-extend e id))
                          env
@@ -162,7 +164,7 @@ Evaluation rules:
          [(Call fun-expr arg-exprs)
            (currify-CCall
             (preprocess fun-expr env)
-            (reverse arg-exprs)
+            arg-exprs
             env)]))
 
 ;; currify hepler for Fun and Call
@@ -180,7 +182,7 @@ Evaluation rules:
              (preprocess (car arg-exprs) env))))
 
 (: eval : CORE ENV -> VAL)
-;; evaluates BRANG expressions by reducing them to values
+;; evaluates CORE expressions by reducing them to values
 (define (eval expr env)
   (cases expr
     [(CNum n) (NumV n)]
@@ -244,7 +246,7 @@ Evaluation rules:
 (test (run "{call {fun {x y} {+ x y}} 1 2}")
       => 3)
 (test (run "{call {fun {a b c d}
-                       {+ 1 { - a {* b {/ c d}}}}} 1 2 3 3}")
+                       {+ 1 {- a {* b {/ c d}}}}} 1 2 3 3}")
       => 0)
 (test (run "{bleh}") =error> "bad syntax in (bleh)")
 (test (run "{with {x 3} {+ 10 y}}")
