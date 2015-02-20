@@ -50,7 +50,6 @@ Evaluation rules:
                              if eval(E1,env1) = <{fun {x} Ef}, env2>
            = error!          otherwise
 |#
-
 (define-type BRANG
   [Num  Number]
   [Add  BRANG BRANG]
@@ -163,7 +162,7 @@ Evaluation rules:
          [(Call fun-expr arg-exprs)
            (currify-CCall
             (preprocess fun-expr env)
-            arg-exprs
+            (reverse arg-exprs)
             env)]))
 
 ;; currify hepler for Fun and Call
@@ -177,9 +176,8 @@ Evaluation rules:
 (define (currify-CCall cfun-expr arg-exprs env)
   (if (null? arg-exprs)
       cfun-expr
-      (let ([arg-exprs (reverse arg-exprs)])
-        (CCall (currify-CCall cfun-expr (cdr arg-exprs) env)
-               (preprocess (car arg-exprs) env)))))
+      (CCall (currify-CCall cfun-expr (cdr arg-exprs) env)
+             (preprocess (car arg-exprs) env))))
 
 (: eval : CORE ENV -> VAL)
 ;; evaluates BRANG expressions by reducing them to values
@@ -245,6 +243,9 @@ Evaluation rules:
       => 124)
 (test (run "{call {fun {x y} {+ x y}} 1 2}")
       => 3)
+(test (run "{call {fun {a b c d}
+                       {+ 1 { - a {* b {/ c d}}}}} 1 2 3 3}")
+      => 0)
 (test (run "{bleh}") =error> "bad syntax in (bleh)")
 (test (run "{with {x 3} {+ 10 y}}")
       =error> "no binding for y")
