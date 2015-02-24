@@ -308,6 +308,21 @@ language that users actually see.
                              {call fib {+ a b} a {- count 1}}}}}
                  {call fib 1 0 10}}")
       => 55)
+(test (run "{rec {bogus
+                   {fun {n}
+                        {if0 n
+                             0
+                             {+ {* {rec {flip {fun {x}
+                                             {if0 x
+                                                  {- 0 1}
+                                                  {* {- 0 1}
+                                                  {call flip {- x 1}}}}}}
+                                        {call flip n}}
+                                    n}
+                                {call bogus {- n 1}}}}}}
+              {call bogus 10}}")
+      => -5)
+;; 1-2+3-4+5-6+7-8+9-10
 (test (run "{rec {x x} x}") =error> "non-fun form in `rec'")
 (test (run "{rec bleh}") =error> "bad `rec' syntax in (rec bleh)")
 (test (run "{if0 bleh}") =error> "bad `if0' syntax in (if0 bleh)")
