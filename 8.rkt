@@ -313,10 +313,10 @@ language that users actually see.
                         {if0 n
                              0
                              {+ {* {rec {flip {fun {x}
-                                             {if0 x
-                                                  {- 0 1}
-                                                  {* {- 0 1}
-                                                  {call flip {- x 1}}}}}}
+                                              {if0 x
+                                                   {- 0 1}
+                                                   {* {- 0 1}
+                                                   {call flip {- x 1}}}}}}
                                         {call flip n}}
                                     n}
                                 {call bogus {- n 1}}}}}}
