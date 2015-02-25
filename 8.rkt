@@ -327,4 +327,4 @@ language that users actually see.
 (test (run "{rec bleh}") =error> "bad `rec' syntax in (rec bleh)")
 (test (run "{if0 bleh}") =error> "bad `if0' syntax in (if0 bleh)")
 
-(define minites-spend 240)
+(define minutes-spent 300)
