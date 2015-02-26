@@ -12,7 +12,7 @@ The grammar:
             | { fun { <id> <id> ... } <BRANG> }
             | { call <BRANG> <BRANG> <BRANG> ... }
             | { rec { <id> <BRANG> } <BRANG> }
-            | { if0 <BRANG> <BRANG> <BRANG }
+            | { if0 <BRANG> <BRANG> <BRANG> }
 
 Core evaluation rules:
   eval(N,env)                = N
@@ -27,8 +27,8 @@ Core evaluation rules:
   eval({call E1 E2},env1)    = eval(Ef,cons(eval(E2,env1),env2))
                                if eval(E1,env1) = <{fun {x} Ef}, env2>
                              = error!  otherwise
-  eval({if0 E1 E2 E3},env)    = eval(E2,env) if eval(E1,env) = 0
-                              = eval(E3,env) else
+  eval({if0 E1 E2 E3},env)   = eval(E2,env) if eval(E1,env) = 0
+                             = eval(E3,env) else
 Note that these rules are incomplete, since they don't represent the
 language that users actually see.
 |#
