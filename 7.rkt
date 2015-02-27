@@ -267,8 +267,6 @@ language that users actually see.
       =error> "bad `fun' syntax")
 (test (run "{call {fun {x} } 4}")
       =error> "bad `fun' syntax")
-;(test (run "{fun {} 1}")
-;      =error> "`fun' with no arguments")
 (test (run "{with {y} }")
       =error> "bad `with' syntax")
 (test (run "{fun {x} {+ x x}}")
@@ -279,8 +277,6 @@ language that users actually see.
       =error> "arith-op: expected a number")
 (test (run "{call 1 1}")
       =error> "expects a function")
-;(test (run "{call {fun {x} x}}")
-;      =error> "missing arguments to `call'")
 (test (run "{bind}") =error> "`bind' variant syntax error in (bind)")
 (test (run "{bind {} {+ 1 2}}")
       =error> "`bind' with no arguments in (bind () (+ 1 2))")
@@ -299,8 +295,8 @@ language that users actually see.
 ;(test (run "{call {fun {} 1}}") =error>
 ;      "missing arguments to `call' in (call (fun () 1))")
 
-;; Can't have variable length argument lists
-(test (run "{call {fun {x} {+ 1 x}} 1 2 3}") =error>
+;; Can't have call functions with a variable number of arguments.
+(test (run "{call {fun {x y ...} {+ 1 x}} 1 2 3 4 5}") =error>
       "`call' expects a function, got: (NumV 2)")
 
 ;; Problems with argumentless-functions
