@@ -68,18 +68,20 @@ language that users actually see.
        [else (error 'parse-sexpr "bad `with' syntax in ~s" sexpr)])]
     [(cons (symbol: (or 'bind 'bind*)) more)
      (match sexpr
-       [(list 'bind 
-              (list (list (symbol: names) (sexpr: nameds)) ...)
+       [(list 'bind
+              (list (list (symbol: name) (sexpr: named))
+                    (list (symbol: names) (sexpr: nameds)) ...)
               (sexpr: body))
-        (if (null? names)
-            (error 'parse-sexpr "`bind' with no arguments in ~s" sexpr)
-            (Bind names (map parse-sexpr nameds) (parse-sexpr body)))]
-       [(list 'bind* 
-              (list (list (symbol: names) (sexpr: nameds)) ...)
+        (Bind (cons name names)
+              (cons (parse-sexpr named) (map parse-sexpr nameds))
+              (parse-sexpr body))]
+       [(list 'bind*
+              (list (list (symbol: name) (sexpr: named))
+                    (list (symbol: names) (sexpr: nameds)) ...)
               (sexpr: body))
-        (if (null? names)
-            (error 'parse-sexpr "`bind*' with no arguments in ~s" sexpr)
-            (Bind* names (map parse-sexpr nameds) (parse-sexpr body)))]
+        (Bind* (cons name names)
+               (cons (parse-sexpr named) (map parse-sexpr nameds))
+               (parse-sexpr body))] 
        [else (error 'parse-sexpr "`bind' variant syntax error in ~s" sexpr)])]
     [(cons 'fun more)
      (match sexpr
@@ -279,9 +281,9 @@ language that users actually see.
       =error> "expects a function")
 (test (run "{bind}") =error> "`bind' variant syntax error in (bind)")
 (test (run "{bind {} {+ 1 2}}")
-      =error> "`bind' with no arguments in (bind () (+ 1 2))")
+      =error> "`bind' variant syntax error in (bind () (+ 1 2))")
 (test (run "{bind* {} {+ 1 2}}")
-      =error> "`bind*' with no arguments in (bind* () (+ 1 2))")
+      =error> "`bind' variant syntax error in (bind* () (+ 1 2))")
 
 ;; test multiple-argument functions
 (test (run "{with {add {fun {x y} {+ x y}}} {call add 7 8}}")
