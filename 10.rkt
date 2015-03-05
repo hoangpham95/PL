@@ -1,6 +1,10 @@
 #lang pl 10
-;; TODO Flesh out rewrite
-;;      Write type definition for define/rec ackerman
+;; TODO Multiple Arguments part:
+;;  - Flesh out rewrite
+;;  - Write type definition for define/rec ackerman
+;;      
+;;      Mutual Recursion part:
+;;  - um, all of it :)
 
 
 ;; Plain Racket Y Combinator
