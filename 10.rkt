@@ -66,3 +66,5 @@
 (test (not (scan "(1232)")))
 (test (not (scan "()(")))
 (test (not (scan "())")))
+
+(define minutes-spent 180)
