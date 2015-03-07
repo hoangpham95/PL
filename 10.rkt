@@ -1,19 +1,12 @@
 #lang pl 10
-;; TODO Multiple Arguments part:
-;;  - Flesh out rewrite
-;;  - Write type definition for define/rec ackerman
-;;
-;;      Mutual Recursion part:
-;;  - um, all of it :)
-
 
 ;; Plain Racket Y Combinator
 (define (Y f)
   ((lambda (x) (x x))
    (lambda (x) (f (lambda (z) ((x x) z))))))
 
+;; Allows for the creation of recursive functions of any arrity
 (rewrite (define/rec (f x ...) E)
-;; TODO :: typed definition
          => (define f
               (let ([g (Y (lambda (f)
                             (lambda (_)
@@ -22,38 +15,26 @@
                                   E)))))])
                 (g #f))))
 
+;; (: ackerman : Natural Natural -> Natural)
+;; One of the earliest-discovered examples of a total computable function that
+;; is not primitive recursive. Stricly increasing, it gets very largs very
+;; quickly.
 (define/rec (ackermann m n)
-;; TODO :: type definition
   (cond [(zero? m) (+ n 1)]
         [(zero? n) (ackermann (- m 1) 1)]
         [else      (ackermann (- m 1) (ackermann m (- n 1)))]))
 
-(define/rec (fib a b count)
-  (if (zero? count)
-      b
-      (fib (+ a b) a (- count 1))))
-
+;; Allows the creation of mutually recursive functions of any arrity.
 (rewrite (letfuns ([(f x ...) E] ...) B)
-;; TODO :: type definition
          => (let ([g (Y (lambda (funs)
                           (lambda (name)
                             (match name
-                             ['f
+                              ['f
                                (lambda (x ...)
                                  (let ([f (funs 'f)] ...)
                                    E))] ...))))])
               (let ([f (g 'f)] ...)
                 B)))
-
-;; tests
-(test (ackermann 3 3) => 61)
-(test (fib 1 0 5) => 5)
-
-;; full coverage for even? odd?
-(test (letfuns ([(even? n) (if (= n 0) #t (odd?  (- n 1)))]
-                [(odd?  n) (if (= n 0) #f (even? (- n 1)))])
-               (and (even? 122) (even? 123)))
-               => #f)
 
 ;; an extended example
 (define scan
@@ -73,7 +54,14 @@
                             [(cons (number: m1) more)
                              (and (< m m1) (nums more m1 n))]
                             [else (loop l n)])])
-    start))
+           start))
+
+;; tests
+;; full coverage for even? odd?
+(test (letfuns ([(even? n) (if (= n 0) #t (odd?  (- n 1)))]
+                [(odd?  n) (if (= n 0) #f (even? (- n 1)))])
+               (and (even? 122) (even? 123)))  => #f)
+(test (ackermann 3 3) => 61)
 (test (scan "(()123(246x12)) (blah)"))
 (test (not (scan "(1232)")))
 (test (not (scan "()(")))
