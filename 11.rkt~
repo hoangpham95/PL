@@ -42,8 +42,8 @@
 ;; comparison for natural numbers
 (define =
   (lambda (x y)
-    (and (zero? (- x y))
-         (zero? (- y x)))))
+    (and (zero? x y)
+         (zero? y x))))
 ;; tests
 (test (->bool (= 0 0)) => '#t)
 (test (->bool (= 1 1)) => '#t)
@@ -218,14 +218,7 @@
 ;; solutions
 (define queens
   (lambda (size)
-    (with [q (configurations size (range 0 size))]
-          (if (null? q)
-              null
-              (car q)))))
-
-;; (define queens-all
-;;   (lambda (size)
-;;     (configurations size (range 0 size))))
+    (configurations size (range 0 size))))
 
 ;; tests
 ;; single solution for a 1x1 board:
@@ -244,9 +237,6 @@
 (define 8 (+ 4 4))
 ;; tests
 (test (->nat 8) => '8)
-
-(define hours-spent 5)
-(test (->nat 5) => '5)
 
 ;; Finally, this is what you want to try:
 ;;   (->listof ->nat (queens 8))
