@@ -12,6 +12,7 @@
            | { fun { <id> ... } <TOY> }
            | { if <TOY> <TOY> <TOY> }
            | { <TOY> <TOY> ... }
+           | { set! <id> <TOY>}
 |#
 
 ;; A matching abstract syntax tree datatype:
@@ -21,7 +22,8 @@
   [Bind (Listof Symbol) (Listof TOY) TOY]
   [Fun  (Listof Symbol) TOY]
   [Call TOY (Listof TOY)]
-  [If   TOY TOY TOY])
+  [If   TOY TOY TOY]
+  [Set  Symbol TOY])
 
 (: unique-list? : (Listof Any) -> Boolean)
 ;; Tests whether a list is unique, used to guard Bind and Fun values.
@@ -57,6 +59,11 @@
        [(list 'if cond then else)
         (If (parse-sexpr cond) (parse-sexpr then) (parse-sexpr else))]
        [else (error 'parse-sexpr "bad `if' syntax in ~s" sexpr)])]
+    [(cons 'set! more)
+     (match sexpr
+       [(list 'set! (symbol: name) expr)
+        (Set name (parse-sexpr expr))]
+       [else (error 'parse-sexpr "bad `set!' syntax in ~s" sexpr)])]
     [(list fun (sexpr: args) ...) ; other lists are applications
      (Call (parse-sexpr fun)
            (map parse-sexpr args))]
@@ -77,7 +84,11 @@
 (define-type VAL
   [RktV  Any]
   [FunV  (Listof Symbol) TOY ENV]
-  [PrimV ((Listof VAL) -> VAL)])
+  [PrimV ((Listof VAL) -> VAL)]
+  [BogusV])
+
+;; use `the-bogus-value instead of creating new bogosities every time
+(define the-bogus-value (BogusV))
 
 ;; a frame is an association list of names and values.
 (define-type FRAME = (Listof (List Symbol (Boxof VAL))))
@@ -156,6 +167,9 @@
   (cases expr
     [(Num n)   (RktV n)]
     [(Id name) (unbox (lookup name env))]
+    [(Set name expr)
+     (set-box! (lookup name env) (eval* expr))
+     the-bogus-value]
     [(Bind names exprs bound-body)
      (eval bound-body (extend names (map eval* exprs) env))]
     [(Fun names bound-body)
@@ -209,11 +223,13 @@
               {fun {x} {fun {y} {+ x y}}}}
              123}")
       => 124)
+(test (run "{bind {{x 5}} {bind {{y {set! x 6}}} 2}}"))
 
 ;; More tests for complete coverage
 (test (run "{bind x 5 x}")      =error> "bad `bind' syntax")
 (test (run "{fun x x}")         =error> "bad `fun' syntax")
 (test (run "{if x}")            =error> "bad `if' syntax")
+(test (run "{set! 5 x}")        =error> "bad `set!' syntax")
 (test (run "{}")                =error> "bad syntax")
 (test (run "{bind {{x 5} {x 5}} x}") =error> "bind* duplicate names")
 (test (run "{fun {x x} x}")     =error> "fun* duplicate names")
