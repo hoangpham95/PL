@@ -9,6 +9,7 @@
    <TOY> ::= <num>
            | <id>
            | { bind {{ <id> <TOY> } ... } <TOY> }
+           | { bindrec {{ <id> <TOY> } ... } <TOY> }
            | { fun { <id> ... } <TOY> }
            | { if <TOY> <TOY> <TOY> }
            | { <TOY> <TOY> ... }
@@ -20,6 +21,7 @@
   [Num  Number]
   [Id   Symbol]
   [Bind (Listof Symbol) (Listof TOY) TOY]
+  [BindRec (Listof Symbol) (Listof TOY) TOY]
   [Fun  (Listof Symbol) TOY]
   [Call TOY (Listof TOY)]
   [If   TOY TOY TOY]
@@ -38,15 +40,20 @@
   (match sexpr
     [(number: n)    (Num n)]
     [(symbol: name) (Id name)]
-    [(cons 'bind more)
+    [(cons (and binder (or 'bind 'bindrec)) more)
      (match sexpr
-       [(list 'bind (list (list (symbol: names) (sexpr: nameds)) ...)
-          body)
+       [(list _ (list (list (symbol: names) (sexpr: nameds)) ...) body)
         (if (unique-list? names)
-          (Bind names (map parse-sexpr nameds) (parse-sexpr body))
-          (error 'parse-sexpr
-                 "`bind' got duplicate names: ~s" names))]
-       [else (error 'parse-sexpr "bad `bind' syntax in ~s" sexpr)])]
+            ((match binder
+               ['bind Bind]
+               ['bindrec BindRec])
+             names
+             (map parse-sexpr nameds)
+             (parse-sexpr body))
+            (error 'parse-sexpr
+                   "`~s' got duplicate names: ~s" binder names))]
+       [else (error 'parse-sexpr
+                    "bad `~s' syntax in ~s" binder sexpr)])]
     [(cons 'fun more)
      (match sexpr
        [(list 'fun (list (symbol: names) ...) body)
@@ -107,6 +114,21 @@
 ;;wraps the input values in boxes and sends them to `raw-extend
 (define (extend names values env)
   (raw-extend names (map (inst box VAL) values) env))
+
+(: extend-rec : (Listof Symbol) (Listof TOY) ENV -> ENV)
+;; extends an environment with a new recursive frame
+(define (extend-rec names exprs env)
+  (if (null? names)
+      env
+      (let* ([new-cell (box the-bogus-value)]
+             [new-env (raw-extend (list (car names))
+                                  (list new-cell)
+                                  env)]
+             [value (eval (car exprs) new-env)])
+        (set-box! new-cell value)
+        (extend-rec (cdr names)
+                    (cdr exprs)
+                    new-env))))
 
 
 (: lookup : Symbol ENV -> (Boxof VAL))
@@ -172,6 +194,8 @@
      the-bogus-value]
     [(Bind names exprs bound-body)
      (eval bound-body (extend names (map eval* exprs) env))]
+    [(BindRec names exprs bound-body)
+     (eval bound-body (extend-rec names exprs env))]
     [(Fun names bound-body)
      (FunV names bound-body env)]
     [(Call fun-expr arg-exprs)
@@ -223,7 +247,16 @@
               {fun {x} {fun {y} {+ x y}}}}
              123}")
       => 124)
-(test (run "{bind {{x 5}} {bind {{y {set! x 6}}} 2}}"))
+(test (run "{bind {{x 5}} {bind {{y {set! x 6}}} 2}}")
+      => 2)
+(test (run "{bindrec {{x 3} {y {+ x 3}} {z {+ y 4}}}{+ z 2}}")
+      => 12)
+(test (run "{bindrec {{fact {fun {n}
+                              {if {= 0 n}
+                                1
+                                {* n {fact {- n 1}}}}}}}
+              {fact 5}}")
+      => 120)
 
 ;; More tests for complete coverage
 (test (run "{bind x 5 x}")      =error> "bad `bind' syntax")
