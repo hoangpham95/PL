@@ -8,9 +8,10 @@
 #| The BNF:
    <TOY> ::= <num>
            | <id>
-           | { bind {{ <id> <TOY> } ... } <TOY> }
-           | { bindrec {{ <id> <TOY> } ... } <TOY> }
-           | { fun { <id> ... } <TOY> }
+           | { bind {{ <id> <TOY> } ... } <TOY> <TOY> ... }
+           | { bindrec {{ <id> <TOY> } ... } <TOY> <TOY> .. }
+           | { fun { <id> ... } <TOY> <TOY> ... }
+           | { rfun { <id> ... } <TOY> <TOY> ... }
            | { if <TOY> <TOY> <TOY> }
            | { <TOY> <TOY> ... }
            | { set! <id> <TOY>}
@@ -20,9 +21,10 @@
 (define-type TOY
   [Num  Number]
   [Id   Symbol]
-  [Bind (Listof Symbol) (Listof TOY) TOY]
-  [BindRec (Listof Symbol) (Listof TOY) TOY]
-  [Fun  (Listof Symbol) TOY]
+  [Bind (Listof Symbol) (Listof TOY) (Listof TOY)]
+  [BindRec (Listof Symbol) (Listof TOY) (Listof TOY)]
+  [Fun  (Listof Symbol) (Listof TOY)]
+  [RFun (Listof Symbol) (Listof TOY)]
   [Call TOY (Listof TOY)]
   [If   TOY TOY TOY]
   [Set  Symbol TOY])
@@ -42,25 +44,31 @@
     [(symbol: name) (Id name)]
     [(cons (and binder (or 'bind 'bindrec)) more)
      (match sexpr
-       [(list _ (list (list (symbol: names) (sexpr: nameds)) ...) body)
+       [(list _ (list (list (symbol: names) (sexpr: nameds)) ...)
+              (sexpr: body0) (sexpr: body) ...)
         (if (unique-list? names)
             ((match binder
                ['bind Bind]
                ['bindrec BindRec])
              names
              (map parse-sexpr nameds)
-             (parse-sexpr body))
+             (map parse-sexpr (cons body0 body)))
             (error 'parse-sexpr
                    "`~s' got duplicate names: ~s" binder names))]
        [else (error 'parse-sexpr
                     "bad `~s' syntax in ~s" binder sexpr)])]
-    [(cons 'fun more)
+    [(cons (and binder (or 'fun 'rfun)) more)
      (match sexpr
-       [(list 'fun (list (symbol: names) ...) body)
+       [(list _ (list (symbol: names) ...)
+              (sexpr: body0) (sexpr: body) ...)
         (if (unique-list? names)
-          (Fun names (parse-sexpr body))
-          (error 'parse-sexpr "`fun' got duplicate names: ~s" names))]
-       [else (error 'parse-sexpr "bad `fun' syntax in ~s" sexpr)])]
+            ((match binder
+               ['fun Fun]
+               ['rfun RFun])
+             names
+             (map parse-sexpr (cons body0 body)))
+            (error 'parse-sexpr "`~s' got duplicate names: ~s" binder names))]
+       [else (error 'parse-sexpr "bad `~s' syntax in ~s" binder sexpr)])]
     [(cons 'if more)
      (match sexpr
        [(list 'if cond then else)
@@ -90,7 +98,7 @@
 
 (define-type VAL
   [RktV  Any]
-  [FunV  (Listof Symbol) TOY ENV]
+  [FunV  (Listof Symbol) (Listof TOY) ENV Boolean]
   [PrimV ((Listof VAL) -> VAL)]
   [BogusV])
 
@@ -180,6 +188,14 @@
 ;;; ==================================================================
 ;;; Evaluation
 
+(: get-boxes : (Listof TOY) ENV -> (Listof (Boxof VAL)))
+;; consumes the expressions and returns a suitable list of boxes
+(define (get-boxes exprs env)
+  (map (lambda ([expr : TOY]) (cases expr
+                                [(Id name) (lookup name env)]
+                                [else (error 'rfun "non-identifier")]))
+       exprs))
+
 (: eval : TOY ENV -> VAL)
 ;; evaluates TOY expressions.
 (define (eval expr env)
@@ -193,18 +209,23 @@
      (set-box! (lookup name env) (eval* expr))
      the-bogus-value]
     [(Bind names exprs bound-body)
-     (eval bound-body (extend names (map eval* exprs) env))]
+     (eval-body bound-body (extend names (map eval* exprs) env))]
     [(BindRec names exprs bound-body)
-     (eval bound-body (extend-rec names exprs env))]
+     (eval-body bound-body (extend-rec names exprs env))]
     [(Fun names bound-body)
-     (FunV names bound-body env)]
+     (FunV names bound-body env #f)]
+    [(RFun names bound-body)
+     (FunV names bound-body env #t)]
     [(Call fun-expr arg-exprs)
-     (let ([fval (eval* fun-expr)]
-           [arg-vals (map eval* arg-exprs)])
+     (let ([fval (eval* fun-expr)])
        (cases fval
-         [(PrimV proc) (proc arg-vals)]
-         [(FunV names body fun-env)
-          (eval body (extend names arg-vals fun-env))]
+         [(PrimV proc) (proc (map eval* arg-exprs))]
+         [(FunV names body fun-env byref?)
+          (if byref?
+              (eval-body body (raw-extend names
+                                          (get-boxes arg-exprs env)
+                                          fun-env))
+              (eval-body body (extend names (map eval* arg-exprs) fun-env)))]
          [else (error 'eval "function call with a non-function: ~s"
                       fval)]))]
     [(If cond-expr then-expr else-expr)
@@ -213,6 +234,11 @@
                   [else #t])   ; other values are always true
               then-expr
               else-expr))]))
+
+(: eval-body : (Listof TOY) ENV -> VAL)
+;; evaluates a list of expressions, returns the last value.
+(define (eval-body exprs env)
+  (foldl (lambda ([expr : TOY] [bogus : VAL]) (eval expr env)) the-bogus-value exprs))
 
 (: run : String -> Any)
 ;; evaluate a TOY program contained in a string
@@ -257,6 +283,30 @@
                                 {* n {fact {- n 1}}}}}}}
               {fact 5}}")
       => 120)
+(test (run "{bind {{make-counter
+                    {fun {}
+                      {bind {{c 0}}
+                        {fun {}
+                          {set! c {+ 1 c}}
+                          c}}}}}
+              {bind {{c1 {make-counter}}
+                    {c2 {make-counter}}}
+                {* {c1} {c1} {c2} {c1}}}}")
+      => 6)
+(test (run "{bindrec {{foo {fun {}
+                            {set! foo {fun {} 2}}
+                            1}}}
+              {+ {foo} {* 10 {foo}}}}")
+      => 21)
+(test (run "{bind {{swap! {rfun {x y}
+                            {bind {{tmp x}}
+                              {set! x y}
+                              {set! y tmp}}}}
+                  {a 1}
+                  {b 2}}
+              {swap! a b}
+              {+ a {* 10 b}}}")
+      => 12)
 
 ;; More tests for complete coverage
 (test (run "{bind x 5 x}")      =error> "bad `bind' syntax")
@@ -275,5 +325,8 @@
 (test (run "{if {< 5 4} 6 7}")  => 7)
 (test (run "{if + 6 7}")        => 6)
 (test (run "{fun {x} x}")       =error> "returned a bad value")
-
+(test (run "{{rfun {x} x} {/ 4 0}}") =error> "non-identifier")
+(test (run "{5 {/ 6 0}}") =error> "non-function")
 ;;; ==================================================================
+
+(define minutes-spent 420)
