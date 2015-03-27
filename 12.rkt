@@ -112,11 +112,11 @@
 ;; extends an environment with a new frame.
 (define (raw-extend names values env)
   (if (= (length names) (length values))
-    (FrameEnv (map (lambda ([name : Symbol] [val : (Boxof VAL)])
-                     (list name val))
-                   names values)
-              env)
-    (error 'raw-extend "arity mismatch for names: ~s" names)))
+      (FrameEnv (map (lambda ([name : Symbol] [val : (Boxof VAL)])
+                       (list name val))
+                     names values)
+                env)
+      (error 'raw-extend "arity mismatch for names: ~s" names)))
 
 (: extend : (Listof Symbol) (Listof VAL) ENV -> ENV)
 ;;wraps the input values in boxes and sends them to `raw-extend
@@ -148,8 +148,8 @@
     [(FrameEnv frame rest)
      (let ([cell (assq name frame)])
        (if cell
-         (second cell)
-         (lookup name rest)))]))
+           (second cell)
+           (lookup name rest)))]))
 
 (: unwrap-rktv : VAL -> Any)
 ;; helper for `racket-func->prim-val': unwrap a RktV wrapper in
@@ -232,8 +232,8 @@
      (eval* (if (cases (eval* cond-expr)
                   [(RktV v) v] ; Racket value => use as boolean
                   [else #t])   ; other values are always true
-              then-expr
-              else-expr))]))
+                then-expr
+                else-expr))]))
 
 (: eval-body : (Listof TOY) ENV -> VAL)
 ;; evaluates a list of expressions, returns the last value.
