@@ -238,7 +238,9 @@
 (: eval-body : (Listof TOY) ENV -> VAL)
 ;; evaluates a list of expressions, returns the last value.
 (define (eval-body exprs env)
-  (foldl (lambda ([expr : TOY] [bogus : VAL]) (eval expr env)) the-bogus-value exprs))
+  (foldl (lambda ([expr : TOY] [bogus : VAL]) (eval expr env))
+         the-bogus-value
+         exprs))
 
 (: run : String -> Any)
 ;; evaluate a TOY program contained in a string
