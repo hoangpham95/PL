@@ -1,4 +1,4 @@
-#lang pl 13
+#lang pl 14
 
 ;;; ==================================================================
 ;;; Syntax
@@ -20,7 +20,7 @@
   [Num  Number]
   [Id   Symbol]
   [Set  Symbol TOY]
-  [Bind    (Listof Symbol) (Listof TOY) (Listof TOY)]
+  [Bind (Listof Symbol) (Listof TOY) (Listof TOY)]
   [BindRec (Listof Symbol) (Listof TOY) (Listof TOY)]
   [Fun  (Listof Symbol) (Listof TOY)]
   [RFun (Listof Symbol) (Listof TOY)]
@@ -85,61 +85,83 @@
 ;;; ==================================================================
 ;;; Values and environments
 
-(define-type ENV = (Listof FRAME))
+(define-type ENV = (Listof (Listof (Boxof VAL))))
 
 (define-type VAL
   [BogusV]
   [RktV  Any]
-  [FunV  (Listof Symbol) (ENV -> VAL) ENV Boolean] ; `byref?' flag
+  [FunV  Natural (ENV -> VAL) ENV Boolean] ; `byref?' flag
   [PrimV ((Listof VAL) -> VAL)])
 
-;; a frame is an association list of names and values.
-(define-type FRAME = (Listof (List Symbol (Boxof VAL))))
 
 ;; a single bogus value to use wherever needed
 (define the-bogus-value (BogusV))
 
-(: raw-extend : (Listof Symbol) (Listof (Boxof VAL)) ENV -> ENV)
+;;(: raw-extend : (Listof (Boxof VAL)) ENV -> ENV)
 ;; extends an environment with a new frame, given names and value
 ;; boxes
-(define (raw-extend names boxed-values env)
-  (if (= (length names) (length boxed-values))
-    (cons (map (lambda ([name : Symbol] [boxed-val : (Boxof VAL)])
-                 (list name boxed-val))
-               names boxed-values)
-          env)
-    (error 'raw-extend "arity mismatch for names: ~s" names)))
+;;(define (raw-extend boxed-values env)
+;;  (cons (map (lambda ([boxed-val : (Boxof VAL)])
+;;               boxed-val)
+;;             boxed-values)
+;;        env))
 
-(: extend : (Listof Symbol) (Listof VAL) ENV -> ENV)
+(: extend : (Listof VAL) ENV -> ENV)
 ;; extends an environment with a new frame (given plain values).
-(define (extend names values env)
-  (raw-extend names (map (inst box VAL) values) env))
+(define (extend values env)
+  (cons (map (inst box VAL) values) env))
 
-(: extend-rec : (Listof Symbol) (Listof (ENV -> VAL)) ENV -> ENV)
+(: extend-rec : (Listof (ENV -> VAL)) ENV -> ENV)
 ;; extends an environment with a new recursive frame (given compiled
 ;; expressions).
-(define (extend-rec names compiled-exprs env)
+(define (extend-rec compiled-exprs env)
   (define new-env
-    (extend names
-            (map (lambda (_) the-bogus-value) compiled-exprs)
+    (cons (map (inst box VAL)
+               (map (lambda (_) the-bogus-value) compiled-exprs))
             env))
   ;; note: no need to check the lengths here, since this is only
   ;; called for `bindrec', and the syntax make it impossible to have
   ;; different lengths
-  (for-each (lambda ([name : Symbol] [compiled : (ENV -> VAL)])
-              (set-box! (lookup name new-env) (compiled new-env)))
-            names compiled-exprs)
+  (for-each (lambda ([env : (Boxof VAL)]
+                     [compiled : (ENV -> VAL)])
+              (set-box! env (compiled new-env)))
+            (car new-env) compiled-exprs)
   new-env)
 
-(: lookup : Symbol ENV -> (Boxof VAL))
+(: global-lookup : Symbol -> VAL)
 ;; looks for a name in an environment, searching through each frame.
-(define (lookup name env)
-  (if (null? env)
-      (error 'lookup "no binding for ~s" name)
-      (let ([cell (assq name (car env))])
-        (if cell
-            (second cell)
-            (lookup name (cdr env))))))
+(define (global-lookup name)
+  (: lookup-helper : Symbol (Listof (List Symbol VAL)) -> VAL)
+  (define (lookup-helper name env)
+    (if (null? env)
+        (error 'global-lookup "no bindings for ~s" name)
+        (let ([cell (assq name env)])
+          (if cell
+              (second cell)
+              (lookup-helper name (cdr env))))))
+  (lookup-helper name global-environment))
+
+(: find-index : Symbol BINDINGS -> (U Boolean (List Natural Natural)))
+;; to get the index that corresponds to some given name
+(define (find-index x bindings)
+  (: index : Symbol (Listof Symbol) Natural -> (U Boolean Natural))
+  ;; helper function to find the index of a symbol in a list
+  ;; assuming that the symbol is in the list
+  (define (index sym l count)
+    (cond [(null? l) #f]
+          [(equal? sym (first l)) count]
+          [else (index sym (rest l) (+ 1 count))]))
+  (: find-index-helper : Symbol BINDINGS Natural ->
+     (U Boolean (List Natural Natural)))
+  ;; helper function for find-index
+  (define (find-index-helper x bindings count)
+    (if (null? bindings)
+        #f
+        (let ([1st (index x (car bindings) 0)])
+          (if (number? 1st)
+            (list count 1st)
+            (find-index-helper x (cdr bindings) (+ 1 count))))))
+  (find-index-helper x bindings 0))
 
 (: unwrap-rktv : VAL -> Any)
 ;; helper for `racket-func->prim-val': unwrap a RktV wrapper in
@@ -149,7 +171,7 @@
     [(RktV v) v]
     [else (error 'racket-func "bad input: ~s" x)]))
 
-(: racket-func->prim-val : Function -> (Boxof VAL))
+(: racket-func->prim-val : Function -> VAL)
 ;; converts a racket function to a primitive evaluator function which
 ;; is a PrimV holding a ((Listof VAL) -> VAL) function.  (the
 ;; resulting function will use the list function as is, and it is the
@@ -157,23 +179,22 @@
 ;; bad number of arguments or bad input types.)
 (define (racket-func->prim-val racket-func)
   (define list-func (make-untyped-list-function racket-func))
-  (box (PrimV (lambda (args)
-                (RktV (list-func (map unwrap-rktv args)))))))
+  (PrimV (lambda (args)
+           (RktV (list-func (map unwrap-rktv args))))))
 
 ;; The global environment has a few primitives:
-(: global-environment : ENV)
+(: global-environment : (Listof (List Symbol VAL)))
 (define global-environment
-  (list (list (list '+ (racket-func->prim-val +))
-              (list '- (racket-func->prim-val -))
-              (list '* (racket-func->prim-val *))
-              (list '/ (racket-func->prim-val /))
-              (list '< (racket-func->prim-val <))
-              (list '> (racket-func->prim-val >))
-              (list '= (racket-func->prim-val =))
-              ;; values
-              (list 'true  (box (RktV #t)))
-              (list 'false (box (RktV #f))))
-        null))
+  (list (list '+ (racket-func->prim-val +))
+        (list '- (racket-func->prim-val -))
+        (list '* (racket-func->prim-val *))
+        (list '/ (racket-func->prim-val /))
+        (list '< (racket-func->prim-val <))
+        (list '> (racket-func->prim-val >))
+        (list '= (racket-func->prim-val =))
+        ;; values
+        (list 'true  (RktV #t))
+        (list 'false (RktV #f))))
 
 ;;; ==================================================================
 ;;; Compilation
@@ -181,7 +202,7 @@
 
 (: compiler-enabled? : (Boxof Boolean))
 ;; a global flag that can disable the compiler
-(define compiler-enabled? (box #f))
+(define compiler-enabled? (box #t))
 
 (: compile-body : (Listof TOY) BINDINGS -> (ENV -> VAL))
 ;; compiles a list of expressions to a single Racket function.
@@ -220,14 +241,22 @@
   ;;     (run-all compiled-exprs)))
   )
 
-(: compile-get-boxes : (Listof TOY) BINDINGS -> (ENV -> (Listof (Boxof VAL))))
+(: compile-get-boxes : (Listof TOY) BINDINGS ->
+   (ENV -> (Listof (Boxof VAL))))
 ;; utility for applying rfun
 (define (compile-get-boxes exprs bindings)
   (: compile-getter : TOY -> (ENV -> (Boxof VAL)))
   (define (compile-getter expr)
     (cases expr
       [(Id name)
-       (lambda ([env : ENV]) (lookup name env))]
+       (let ([pos (find-index name bindings)])
+         (lambda ([env : ENV])
+           (if (list? pos)
+               (list-ref (list-ref env (first pos))
+                                 (second pos))
+               (if (global-lookup name)
+                   (error 'runtime "trying to set a global binding")
+                   (error 'runtime "no bindings")))))]
       [else
        (lambda ([env : ENV])
          (error 'call "rfun application with a non-identifier ~s"
@@ -253,33 +282,50 @@
     (error 'compile "compiler disabled"))
     (cases expr
     [(Num n)   (lambda ([env : ENV]) (RktV n))]
-    [(Id name) (lambda ([env : ENV]) (unbox (lookup name env)))]
+    [(Id name) (let ([pos (find-index name bindings)])
+                  (lambda ([env : ENV])
+                    (if (list? pos)
+                        (unbox (list-ref (list-ref env
+                                                   (first pos))
+                                         (second pos)))
+                        (global-lookup name))))]
     [(Set name new)
-     (let ([compiled-new (compile* new)])
+     (let ([compiled-new (compile* new)]
+           [pos (find-index name bindings)])
        (lambda ([env : ENV])
-         (set-box! (lookup name env) (compiled-new env))
+         (if (list? pos)
+                (set-box! (list-ref (list-ref env (first pos))
+                                             (second pos))
+                          (compiled-new env))
+                (unless (not (global-lookup name))
+                    (error 'compile "Trying to mutating a global")))
          the-bogus-value))]
     [(Bind names exprs bound-body)
-     (let ([compiled-exprs (map compile* exprs)]
-           [compiled-body  (compile-body bound-body bindings)])
+     (let* ([new-bindings (cons names bindings)]
+            [compiled-exprs (map compile* exprs)]
+            [compiled-body  (compile-body bound-body new-bindings)])
        (lambda ([env : ENV])
          (compiled-body
-          (extend names (map (runner env) compiled-exprs) env))))]
+          (extend (map (runner env) compiled-exprs) env))))]
     [(BindRec names exprs bound-body)
      (let ([compiled-exprs (map compile* exprs)]
-           [compiled-body  (compile-body bound-body bindings)])
+           [compiled-body  (compile-body bound-body bindings)]
+           [bogus (cons names bindings)])
        (lambda ([env : ENV])
-         (compiled-body (extend-rec names compiled-exprs env))))]
+         (compiled-body (extend-rec compiled-exprs env))))]
     [(Fun names bound-body)
-     (let ([compiled-body (compile-body bound-body bindings)])
-       (lambda ([env : ENV]) (FunV names compiled-body env #f)))]
+     (let ([compiled-body (compile-body bound-body bindings)]
+           [body-length (length bound-body)])
+       (lambda ([env : ENV]) (FunV body-length compiled-body env #f)))]
     [(RFun names bound-body)
-     (let ([compiled-body (compile-body bound-body bindings)])
-       (lambda ([env : ENV]) (FunV names compiled-body env #t)))]
+     (let ([compiled-body (compile-body bound-body bindings)]
+           [body-length (length bound-body)])
+       (lambda ([env : ENV]) (FunV body-length compiled-body env #t)))]
     [(Call fun-expr arg-exprs)
      (let ([compiled-fun  (compile fun-expr bindings)]
            [compiled-args (map compile* arg-exprs)]
-           [compiled-boxes-getter (compile-get-boxes arg-exprs bindings)])
+           [compiled-boxes-getter (compile-get-boxes arg-exprs bindings)]
+           [arg-length (length arg-exprs)])
        (lambda ([env : ENV])
          (let ([fval (compiled-fun env)]
                ;; delay evaluating the arguments
@@ -287,12 +333,13 @@
                            (map (runner env) compiled-args))])
            (cases fval
              [(PrimV proc) (proc (arg-vals))]
-             [(FunV names compiled-body fun-env byref?)
-              (compiled-body (if byref?
-                               (raw-extend names
-                                           (compiled-boxes-getter env)
-                                           fun-env)
-                               (extend names (arg-vals) fun-env)))]
+             [(FunV body-length compiled-body fun-env byref?)
+              (if (= arg-length body-length)
+                  (compiled-body (if byref?
+                                     (cons (compiled-boxes-getter env)
+                                                 fun-env)
+                                     (extend (arg-vals) fun-env)))
+                  (error 'FunV "Arg-exprs and body-length not equal"))]
              [else (error 'call "function call with a non-function: ~s"
                           fval)]))))]
     [(If cond-expr then-expr else-expr)
@@ -307,45 +354,13 @@
             compiled-else)
           env)))]))
 
-(: find-index : Symbol BINDINGS -> (U Boolean (List Natural Natural)))
-;; to get the index that corresponds to some given name
-(define (find-index x bindings)
-  (: in-list : Symbol (Listof Symbol) -> Boolean)
-  ;; helper function to judge if a symbol is in list
-  (define (in-list sym l)
-    (cond [(null? l) #f]
-          [(equal? sym (car l)) #t]
-          [else (in-list sym (cdr l))]))
-  (: index : Symbol (Listof Symbol) Natural -> Natural)
-  ;; helper function to find the index of a symbol in a list
-  ;; assuming that the symbol is in the list
-  (define (index sym l count)
-    (if (equal? sym (first l))
-        count
-        (index sym (rest l) (+ 1 count))))
-  (: find-index-helper : Symbol BINDINGS Natural ->
-     (U Boolean (List Natural Natural)))
-  ;; helper function for find-index
-  (define (find-index-helper x bindings count)
-    (if (null? bindings)
-        #f
-        (if (in-list x (car bindings))
-            (list count (index x (car bindings) 0))
-            (find-index-helper x (cdr bindings) (+ 1 count)))))
-  (find-index-helper x bindings 0))
-
-(test (find-index 'a '((a b c) () (c d e))) => '(0 0))
-(test (find-index 'e '((a b c) () (c d e))) => '(2 2))
-(test (find-index 'c '((a b c) () (c d e))) => '(0 2))
-(test (find-index 'x '((a b c) () (c d e))) => #f)
-
 (: run : String -> Any)
 ;; compiles and runs a TOY program contained in a string
 (define (run str)
   (set-box! compiler-enabled? #t)
   (let ([compiled (compile (parse str) null)])
     (set-box! compiler-enabled? #f)
-    (let ([result (compiled global-environment)])
+    (let ([result (compiled null)])
       (cases result
         [(RktV v) v]
         [else (error 'run "the program returned a bad value: ~s"
@@ -354,98 +369,104 @@
 ;;; ==================================================================
 ;;; Tests
 
-(test (run "{{fun {x} {+ x 1}} 4}")
-      => 5)
+;;(test (run "{{fun {x} {+ x 1}} 4}")
+;;      => 5)
 (test (run "{bind {{add3 {fun {x} {+ x 3}}}} {add3 1}}")
       => 4)
-(test (run "{bind {{add3 {fun {x} {+ x 3}}}
-                   {add1 {fun {x} {+ x 1}}}}
-              {bind {{x 3}} {add1 {add3 x}}}}")
-      => 7)
-(test (run "{bind {{identity {fun {x} x}}
-                   {foo {fun {x} {+ x 1}}}}
-              {{identity foo} 123}}")
-      => 124)
-(test (run "{bind {{x 3}}
-              {bind {{f {fun {y} {+ x y}}}}
-                {bind {{x 5}}
-                  {f 4}}}}")
-      => 7)
-(test (run "{{{fun {x} {x 1}}
-              {fun {x} {fun {y} {+ x y}}}}
-             123}")
-      => 124)
+;;(test (run "{bind {{add3 {fun {x} {+ x 3}}}
+;;                   {add1 {fun {x} {+ x 1}}}}
+;;              {bind {{x 3}} {add1 {add3 x}}}}")
+;;      => 7)
+;;(test (run "{bind {{identity {fun {x} x}}
+;;                   {foo {fun {x} {+ x 1}}}}
+;;              {{identity foo} 123}}")
+;;      => 124)
+;;(test (run "{bind {{x 3}}
+;;              {bind {{f {fun {y} {+ x y}}}}
+;;                {bind {{x 5}}
+;;                  {f 4}}}}")
+;;      => 7)
+;;(test (run "{{{fun {x} {x 1}}
+;;              {fun {x} {fun {y} {+ x y}}}}
+;;             123}")
+;;      => 124)
 
 ;; More tests for complete coverage
 (test (run "{bind x 5 x}")      =error> "bad `bind' syntax")
 (test (run "{fun x x}")         =error> "bad `fun' syntax")
 (test (run "{if x}")            =error> "bad `if' syntax")
 (test (run "{}")                =error> "bad syntax")
-(test (run "{bind {{x 5} {x 5}} x}") =error> "duplicate*bind*names")
-(test (run "{fun {x x} x}")     =error> "duplicate*fun*names")
-(test (run "{+ x 1}")           =error> "no binding for")
-(test (run "{+ 1 {fun {x} x}}") =error> "bad input")
-(test (run "{+ 1 {fun {x} x}}") =error> "bad input")
-(test (run "{1 2}")             =error> "with a non-function")
-(test (run "{{fun {x} x}}")     =error> "arity mismatch")
-(test (run "{if {< 4 5} 6 7}")  => 6)
-(test (run "{if {< 5 4} 6 7}")  => 7)
-(test (run "{if + 6 7}")        => 6)
-(test (run "{fun {x} x}")       =error> "returned a bad value")
+;;(test (run "{bind {{x 5} {x 5}} x}") =error> "duplicate*bind*names")
+;;(test (run "{fun {x x} x}")     =error> "duplicate*fun*names")
+;;(test (run "{+ x 1}")           =error> "no binding for")
+;;(test (run "{+ 1 {fun {x} x}}") =error> "bad input")
+;;(test (run "{+ 1 {fun {x} x}}") =error> "bad input")
+;;(test (run "{1 2}")             =error> "with a non-function")
+;;(test (run "{{fun {x} x}}")     =error> "arity mismatch")
+;;(test (run "{if {< 4 5} 6 7}")  => 6)
+;;(test (run "{if {< 5 4} 6 7}")  => 7)
+;;(test (run "{if + 6 7}")        => 6)
+;;(test (run "{fun {x} x}")       =error> "returned a bad value")
+;;
+;;;; assignment tests
+;;(test (run "{set! {+ x 1} x}")  =error> "bad `set!' syntax")
+;;(test (run "{bind {{x 1}} {set! x {+ x 1}} x}") => 2)
+;;
+;;;; `bindrec' tests
+;;(test (run "{bindrec {x 6} x}") =error> "bad `bindrec' syntax")
+;;(test (run "{bindrec {{fact {fun {n}
+;;                              {if {= 0 n}
+;;                                1
+;;                                {* n {fact {- n 1}}}}}}}
+;;              {fact 5}}")
+;;      => 120)
+;;
+;;;; tests for multiple expressions and assignment
+;;(test (run "{bind {{make-counter
+;;                     {fun {}
+;;                       {bind {{c 0}}
+;;                         {fun {}
+;;                           {set! c {+ 1 c}}
+;;                           c}}}}}
+;;              {bind {{c1 {make-counter}}
+;;                     {c2 {make-counter}}}
+;;                {* {c1} {c1} {c2} {c1}}}}")
+;;      => 6)
+;;(test (run "{bindrec {{foo {fun {}
+;;                             {set! foo {fun {} 2}}
+;;                             1}}}
+;;              {+ {foo} {* 10 {foo}}}}")
+;;      => 21)
+;;
+;;;; `rfun' tests
+;;(test (run "{{rfun {x} x} 4}") =error> "non-identifier")
+;;(test (run "{bind {{swap! {rfun {x y}
+;;                            {bind {{tmp x}}
+;;                              {set! x y}
+;;                              {set! y tmp}}}}
+;;                   {a 1}
+;;                   {b 2}}
+;;              {swap! a b}
+;;              {+ a {* 10 b}}}")
+;;      => 12)
+;;
+;;;; test that argument are not evaluated redundantly
+;;(test (run "{{rfun {x} x} {/ 4 0}}") =error> "non-identifier")
+;;(test (run "{5 {/ 6 0}}") =error> "non-function")
+;;
+;;;; test compiler-disabled flag, for complete coverage
+;;;; (these tests must use the functions instead of the toplevel `run',
+;;;; since there is no way to get this error otherwise, this indicates
+;;;; that this error should not occur outside of our code -- it is an
+;;;; internal error check)
+;;(test (compile (Num 1) null) =error> "compiler disabled")
+;;(test (compile-body (list (Num 1)) null) =error> "compiler disabled")
+;;(test (compile-get-boxes (list (Num 1)) null) =error> "compiler disabled")
 
-;; assignment tests
-(test (run "{set! {+ x 1} x}")  =error> "bad `set!' syntax")
-(test (run "{bind {{x 1}} {set! x {+ x 1}} x}") => 2)
-
-;; `bindrec' tests
-(test (run "{bindrec {x 6} x}") =error> "bad `bindrec' syntax")
-(test (run "{bindrec {{fact {fun {n}
-                              {if {= 0 n}
-                                1
-                                {* n {fact {- n 1}}}}}}}
-              {fact 5}}")
-      => 120)
-
-;; tests for multiple expressions and assignment
-(test (run "{bind {{make-counter
-                     {fun {}
-                       {bind {{c 0}}
-                         {fun {}
-                           {set! c {+ 1 c}}
-                           c}}}}}
-              {bind {{c1 {make-counter}}
-                     {c2 {make-counter}}}
-                {* {c1} {c1} {c2} {c1}}}}")
-      => 6)
-(test (run "{bindrec {{foo {fun {}
-                             {set! foo {fun {} 2}}
-                             1}}}
-              {+ {foo} {* 10 {foo}}}}")
-      => 21)
-
-;; `rfun' tests
-(test (run "{{rfun {x} x} 4}") =error> "non-identifier")
-(test (run "{bind {{swap! {rfun {x y}
-                            {bind {{tmp x}}
-                              {set! x y}
-                              {set! y tmp}}}}
-                   {a 1}
-                   {b 2}}
-              {swap! a b}
-              {+ a {* 10 b}}}")
-      => 12)
-
-;; test that argument are not evaluated redundantly
-(test (run "{{rfun {x} x} {/ 4 0}}") =error> "non-identifier")
-(test (run "{5 {/ 6 0}}") =error> "non-function")
-
-;; test compiler-disabled flag, for complete coverage
-;; (these tests must use the functions instead of the toplevel `run',
-;; since there is no way to get this error otherwise, this indicates
-;; that this error should not occur outside of our code -- it is an
-;; internal error check)
-(test (compile (Num 1) null) =error> "compiler disabled")
-(test (compile-body (list (Num 1)) null) =error> "compiler disabled")
-(test (compile-get-boxes (list (Num 1)) null) =error> "compiler disabled")
+;; test for find-index
+(test (find-index 'a '((a b c) () (c d e))) => '(0 0))
+(test (find-index 'e '((a b c) () (c d e))) => '(2 2))
+(test (find-index 'c '((a b c) () (c d e))) => '(0 2))
+(test (find-index 'x '((a b c) () (c d e))) => #f)
 
 ;;; ==================================================================
