@@ -134,7 +134,7 @@
   (: lookup-helper : Symbol (Listof (List Symbol VAL)) -> VAL)
   (define (lookup-helper name env)
     (if (null? env)
-        (error 'global-lookup "no bindings for ~s" name)
+        (error 'global-lookup "no binding for ~s" name)
         (let ([cell (assq name env)])
           (if cell
               (second cell)
@@ -256,7 +256,7 @@
                                  (second pos))
                (if (global-lookup name)
                    (error 'runtime "trying to set a global binding")
-                   (error 'runtime "no bindings")))))]
+                   (error 'global-lookup "no binding")))))]
       [else
        (lambda ([env : ENV])
          (error 'call "rfun application with a non-identifier ~s"
@@ -297,29 +297,29 @@
                 (set-box! (list-ref (list-ref env (first pos))
                                              (second pos))
                           (compiled-new env))
-                (unless (not (global-lookup name))
+                (when (global-lookup name)
                     (error 'compile "Trying to mutating a global")))
          the-bogus-value))]
     [(Bind names exprs bound-body)
-     (let* ([new-bindings (cons names bindings)]
-            [compiled-exprs (map compile* exprs)]
-            [compiled-body  (compile-body bound-body new-bindings)])
+     (let ([compiled-exprs (map compile* exprs)]
+           [compiled-body  (compile-body bound-body (cons names bindings))])
        (lambda ([env : ENV])
          (compiled-body
           (extend (map (runner env) compiled-exprs) env))))]
     [(BindRec names exprs bound-body)
-     (let ([compiled-exprs (map compile* exprs)]
-           [compiled-body  (compile-body bound-body bindings)]
-           [bogus (cons names bindings)])
+     (let* ([new-bindings (cons names bindings)]
+            [compiled-exprs (map compile* exprs)]
+            [compiled-body  (compile-body bound-body new-bindings)])
        (lambda ([env : ENV])
-         (compiled-body (extend-rec compiled-exprs env))))]
+         (compiled-body (extend-rec compiled-exprs env))))] 
     [(Fun names bound-body)
-     (let ([compiled-body (compile-body bound-body bindings)]
+     (let ([compiled-body (compile-body bound-body (cons names bindings))]
            [body-length (length bound-body)])
        (lambda ([env : ENV]) (FunV body-length compiled-body env #f)))]
     [(RFun names bound-body)
-     (let ([compiled-body (compile-body bound-body bindings)]
-           [body-length (length bound-body)])
+     (let* (
+            [compiled-body (compile-body bound-body bindings)]
+            [body-length (length bound-body)])
        (lambda ([env : ENV]) (FunV body-length compiled-body env #t)))]
     [(Call fun-expr arg-exprs)
      (let ([compiled-fun  (compile fun-expr bindings)]
@@ -339,7 +339,7 @@
                                      (cons (compiled-boxes-getter env)
                                                  fun-env)
                                      (extend (arg-vals) fun-env)))
-                  (error 'FunV "Arg-exprs and body-length not equal"))]
+                  (error 'FunV "arity mismatch"))]
              [else (error 'call "function call with a non-function: ~s"
                           fval)]))))]
     [(If cond-expr then-expr else-expr)
@@ -369,59 +369,61 @@
 ;;; ==================================================================
 ;;; Tests
 
-;;(test (run "{{fun {x} {+ x 1}} 4}")
-;;      => 5)
+
+
+(test (run "{{fun {x} {+ x 1}} 4}")
+      => 5)
 (test (run "{bind {{add3 {fun {x} {+ x 3}}}} {add3 1}}")
       => 4)
-;;(test (run "{bind {{add3 {fun {x} {+ x 3}}}
-;;                   {add1 {fun {x} {+ x 1}}}}
-;;              {bind {{x 3}} {add1 {add3 x}}}}")
-;;      => 7)
-;;(test (run "{bind {{identity {fun {x} x}}
-;;                   {foo {fun {x} {+ x 1}}}}
-;;              {{identity foo} 123}}")
-;;      => 124)
-;;(test (run "{bind {{x 3}}
-;;              {bind {{f {fun {y} {+ x y}}}}
-;;                {bind {{x 5}}
-;;                  {f 4}}}}")
-;;      => 7)
-;;(test (run "{{{fun {x} {x 1}}
-;;              {fun {x} {fun {y} {+ x y}}}}
-;;             123}")
-;;      => 124)
+(test (run "{bind {{add3 {fun {x} {+ x 3}}}
+                   {add1 {fun {x} {+ x 1}}}}
+              {bind {{x 3}} {add1 {add3 x}}}}")
+      => 7)
+(test (run "{bind {{identity {fun {x} x}}
+                   {foo {fun {x} {+ x 1}}}}
+              {{identity foo} 123}}")
+      => 124)
+(test (run "{bind {{x 3}}
+              {bind {{f {fun {y} {+ x y}}}}
+                {bind {{x 5}}
+                  {f 4}}}}")
+      => 7)
+(test (run "{{{fun {x} {x 1}}
+              {fun {x} {fun {y} {+ x y}}}}
+             123}")
+      => 124)
 
 ;; More tests for complete coverage
 (test (run "{bind x 5 x}")      =error> "bad `bind' syntax")
 (test (run "{fun x x}")         =error> "bad `fun' syntax")
 (test (run "{if x}")            =error> "bad `if' syntax")
 (test (run "{}")                =error> "bad syntax")
-;;(test (run "{bind {{x 5} {x 5}} x}") =error> "duplicate*bind*names")
-;;(test (run "{fun {x x} x}")     =error> "duplicate*fun*names")
-;;(test (run "{+ x 1}")           =error> "no binding for")
-;;(test (run "{+ 1 {fun {x} x}}") =error> "bad input")
-;;(test (run "{+ 1 {fun {x} x}}") =error> "bad input")
-;;(test (run "{1 2}")             =error> "with a non-function")
-;;(test (run "{{fun {x} x}}")     =error> "arity mismatch")
-;;(test (run "{if {< 4 5} 6 7}")  => 6)
-;;(test (run "{if {< 5 4} 6 7}")  => 7)
-;;(test (run "{if + 6 7}")        => 6)
-;;(test (run "{fun {x} x}")       =error> "returned a bad value")
-;;
+(test (run "{bind {{x 5} {x 5}} x}") =error> "duplicate*bind*names")
+(test (run "{fun {x x} x}")     =error> "duplicate*fun*names")
+(test (run "{+ x 1}")           =error> "no binding for")
+(test (run "{+ 1 {fun {x} x}}") =error> "bad input")
+(test (run "{+ 1 {fun {x} x}}") =error> "bad input")
+(test (run "{1 2}")             =error> "with a non-function")
+(test (run "{{fun {x} x}}")     =error> "arity mismatch")
+(test (run "{if {< 4 5} 6 7}")  => 6)
+(test (run "{if {< 5 4} 6 7}")  => 7)
+(test (run "{if + 6 7}")        => 6)
+(test (run "{fun {x} x}")       =error> "returned a bad value")
+
 ;;;; assignment tests
-;;(test (run "{set! {+ x 1} x}")  =error> "bad `set!' syntax")
-;;(test (run "{bind {{x 1}} {set! x {+ x 1}} x}") => 2)
-;;
-;;;; `bindrec' tests
-;;(test (run "{bindrec {x 6} x}") =error> "bad `bindrec' syntax")
+(test (run "{set! {+ x 1} x}")  =error> "bad `set!' syntax")
+(test (run "{bind {{x 1}} {set! x {+ x 1}} x}") => 2)
+
+;; `bindrec' tests
+(test (run "{bindrec {x 6} x}") =error> "bad `bindrec' syntax")
 ;;(test (run "{bindrec {{fact {fun {n}
 ;;                              {if {= 0 n}
 ;;                                1
 ;;                                {* n {fact {- n 1}}}}}}}
 ;;              {fact 5}}")
 ;;      => 120)
-;;
-;;;; tests for multiple expressions and assignment
+
+;; tests for multiple expressions and assignment
 ;;(test (run "{bind {{make-counter
 ;;                     {fun {}
 ;;                       {bind {{c 0}}
@@ -449,10 +451,10 @@
 ;;              {swap! a b}
 ;;              {+ a {* 10 b}}}")
 ;;      => 12)
-;;
-;;;; test that argument are not evaluated redundantly
-;;(test (run "{{rfun {x} x} {/ 4 0}}") =error> "non-identifier")
-;;(test (run "{5 {/ 6 0}}") =error> "non-function")
+
+;; test that argument are not evaluated redundantly
+(test (run "{{rfun {x} x} {/ 4 0}}") =error> "non-identifier")
+(test (run "{5 {/ 6 0}}") =error> "non-function")
 ;;
 ;;;; test compiler-disabled flag, for complete coverage
 ;;;; (these tests must use the functions instead of the toplevel `run',
