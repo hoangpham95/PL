@@ -307,19 +307,23 @@
          (compiled-body
           (extend (map (runner env) compiled-exprs) env))))]
     [(BindRec names exprs bound-body)
-     (let* ([new-bindings (cons names bindings)]
-            [compiled-exprs (map compile* exprs)]
-            [compiled-body  (compile-body bound-body new-bindings)])
-       (lambda ([env : ENV])
-         (compiled-body (extend-rec compiled-exprs env))))] 
+     (let* ([new-bindings (if (null? bindings)
+                             (cons names bindings)
+                             (cons (append names (car bindings)) (cdr bindings)))]
+           [compiled-exprs (map (lambda ([expr : TOY]) (compile expr new-bindings)) exprs)]
+           [compiled-body  (compile-body bound-body new-bindings)])
+         (lambda ([env : ENV])
+           (compiled-body (extend-rec compiled-exprs env))))]
     [(Fun names bound-body)
      (let ([compiled-body (compile-body bound-body (cons names bindings))]
-           [body-length (length bound-body)])
+           [body-length (length names)])
        (lambda ([env : ENV]) (FunV body-length compiled-body env #f)))]
     [(RFun names bound-body)
-     (let* (
-            [compiled-body (compile-body bound-body bindings)]
-            [body-length (length bound-body)])
+     (let* ([new-bindings (if (null? bindings)
+                             (cons names bindings)
+                             (cons (append names (car bindings)) (cdr bindings)))]
+            [compiled-body (compile-body bound-body new-bindings)]
+            [body-length (length names)])
        (lambda ([env : ENV]) (FunV body-length compiled-body env #t)))]
     [(Call fun-expr arg-exprs)
      (let ([compiled-fun  (compile fun-expr bindings)]
@@ -370,7 +374,6 @@
 ;;; Tests
 
 
-
 (test (run "{{fun {x} {+ x 1}} 4}")
       => 5)
 (test (run "{bind {{add3 {fun {x} {+ x 3}}}} {add3 1}}")
@@ -410,65 +413,71 @@
 (test (run "{if + 6 7}")        => 6)
 (test (run "{fun {x} x}")       =error> "returned a bad value")
 
-;;;; assignment tests
+;; assignment tests
 (test (run "{set! {+ x 1} x}")  =error> "bad `set!' syntax")
 (test (run "{bind {{x 1}} {set! x {+ x 1}} x}") => 2)
 
 ;; `bindrec' tests
 (test (run "{bindrec {x 6} x}") =error> "bad `bindrec' syntax")
-;;(test (run "{bindrec {{fact {fun {n}
-;;                              {if {= 0 n}
-;;                                1
-;;                                {* n {fact {- n 1}}}}}}}
-;;              {fact 5}}")
-;;      => 120)
+(test (run "{bindrec {{frac {fun {n}
+                            {if {= 0 n}
+                                1
+                                {* n {frac {- n 1}}}}}}}
+              {frac 5}}") => 120)
 
 ;; tests for multiple expressions and assignment
-;;(test (run "{bind {{make-counter
-;;                     {fun {}
-;;                       {bind {{c 0}}
-;;                         {fun {}
-;;                           {set! c {+ 1 c}}
-;;                           c}}}}}
-;;              {bind {{c1 {make-counter}}
-;;                     {c2 {make-counter}}}
-;;                {* {c1} {c1} {c2} {c1}}}}")
-;;      => 6)
-;;(test (run "{bindrec {{foo {fun {}
-;;                             {set! foo {fun {} 2}}
-;;                             1}}}
-;;              {+ {foo} {* 10 {foo}}}}")
-;;      => 21)
-;;
-;;;; `rfun' tests
-;;(test (run "{{rfun {x} x} 4}") =error> "non-identifier")
-;;(test (run "{bind {{swap! {rfun {x y}
-;;                            {bind {{tmp x}}
-;;                              {set! x y}
-;;                              {set! y tmp}}}}
-;;                   {a 1}
-;;                   {b 2}}
-;;              {swap! a b}
-;;              {+ a {* 10 b}}}")
-;;      => 12)
+(test (run "{bind {{make-counter
+                     {fun {}
+                       {bind {{c 0}}
+                         {fun {}
+                           {set! c {+ 1 c}}
+                           c}}}}}
+              {bind {{c1 {make-counter}}
+                     {c2 {make-counter}}}
+                {* {c1} {c1} {c2} {c1}}}}")
+      => 6)
+(test (run "{bindrec {{foo {fun {}
+                             {set! foo {fun {} 2}}
+                             1}}}
+              {+ {foo} {* 10 {foo}}}}")
+      => 21)
+
+;; `rfun' tests
+(test (run "{{rfun {x} x} 4}") =error> "non-identifier")
+(test (run "{bind {{swap! {rfun {x y}
+                            {bind {{tmp x}}
+                              {set! x y}
+                              {set! y tmp}}}}
+                   {a 1}
+                   {b 2}}
+              {swap! a b}
+              {+ a {* 10 b}}}")
+      => 12)
 
 ;; test that argument are not evaluated redundantly
 (test (run "{{rfun {x} x} {/ 4 0}}") =error> "non-identifier")
 (test (run "{5 {/ 6 0}}") =error> "non-function")
-;;
-;;;; test compiler-disabled flag, for complete coverage
-;;;; (these tests must use the functions instead of the toplevel `run',
-;;;; since there is no way to get this error otherwise, this indicates
-;;;; that this error should not occur outside of our code -- it is an
-;;;; internal error check)
-;;(test (compile (Num 1) null) =error> "compiler disabled")
-;;(test (compile-body (list (Num 1)) null) =error> "compiler disabled")
-;;(test (compile-get-boxes (list (Num 1)) null) =error> "compiler disabled")
+
+;; test compiler-disabled flag, for complete coverage
+;; (these tests must use the functions instead of the toplevel `run',
+;; since there is no way to get this error otherwise, this indicates
+;; that this error should not occur outside of our code -- it is an
+;; internal error check)
+(test (compile (Num 1) null) =error> "compiler disabled")
+(test (compile-body (list (Num 1)) null) =error> "compiler disabled")
+(test (compile-get-boxes (list (Num 1)) null) =error> "compiler disabled")
 
 ;; test for find-index
 (test (find-index 'a '((a b c) () (c d e))) => '(0 0))
 (test (find-index 'e '((a b c) () (c d e))) => '(2 2))
 (test (find-index 'c '((a b c) () (c d e))) => '(0 2))
 (test (find-index 'x '((a b c) () (c d e))) => #f)
+
+(time (run "{bindrec {{fib {fun {n}
+                            {if {< n 2}
+                              n
+                              {+ {fib {- n 1}}
+                                  {fib {- n 2}}}}}}}
+              {fib 27}}"))
 
 ;;; ==================================================================
