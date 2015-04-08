@@ -106,10 +106,10 @@
 ;;             boxed-values)
 ;;        env))
 
-(: extend : (Listof VAL) ENV -> ENV)
-;; extends an environment with a new frame (given plain values).
-(define (extend values env)
-  (cons (map (inst box VAL) values) env))
+;;(: extend : (Listof VAL) ENV -> ENV)
+;;;; extends an environment with a new frame (given plain values).
+;;(define (extend values env)
+;;  (cons (map (inst box VAL) values) env))
 
 (: extend-rec : (Listof (ENV -> VAL)) ENV -> ENV)
 ;; extends an environment with a new recursive frame (given compiled
@@ -253,10 +253,10 @@
          (lambda ([env : ENV])
            (if (list? pos)
                (list-ref (list-ref env (first pos))
-                                 (second pos))
-               (if (global-lookup name)
-                   (error 'runtime "trying to set a global binding")
-                   (error 'global-lookup "no binding")))))]
+                         (second pos))
+               (let ([found? (global-lookup name)])
+                  (when found? (error 'run-time 
+                                      "trying to mutating global"))))))]
       [else
        (lambda ([env : ENV])
          (error 'call "rfun application with a non-identifier ~s"
@@ -275,9 +275,9 @@
   (: compile* :  TOY -> (ENV -> VAL))
   ;; helper that passes along the same bindings to compile
   (define (compile* expr) (compile expr bindings))
-  (: runner : ENV -> ((ENV -> VAL) -> VAL))
-  (define (runner env)
-    (lambda (compiled) (compiled env)))
+  (: boxed-runner : ENV -> ((ENV -> VAL) -> (Boxof VAL)))
+  (define (boxed-runner env)
+    (lambda (compiled) ((inst box VAL) (compiled env))))
   (unless (unbox compiler-enabled?)
     (error 'compile "compiler disabled"))
     (cases expr
@@ -305,13 +305,11 @@
            [compiled-body  (compile-body bound-body (cons names bindings))])
        (lambda ([env : ENV])
          (compiled-body
-          (extend (map (runner env) compiled-exprs) env))))]
+          (cons (map (boxed-runner env) compiled-exprs) env))))]
     [(BindRec names exprs bound-body)
-     (let* ([new-bindings (if (null? bindings)
-                             (cons names bindings)
-                             (cons (append names (car bindings)) (cdr bindings)))]
-           [compiled-exprs (map (lambda ([expr : TOY]) (compile expr new-bindings)) exprs)]
-           [compiled-body  (compile-body bound-body new-bindings)])
+     (let* ([new-bindings (cons names bindings)]
+            [compiled-exprs (map (lambda ([expr : TOY]) (compile expr new-bindings)) exprs)]
+            [compiled-body  (compile-body bound-body new-bindings)])
          (lambda ([env : ENV])
            (compiled-body (extend-rec compiled-exprs env))))]
     [(Fun names bound-body)
@@ -319,11 +317,8 @@
            [body-length (length names)])
        (lambda ([env : ENV]) (FunV body-length compiled-body env #f)))]
     [(RFun names bound-body)
-     (let* ([new-bindings (if (null? bindings)
-                             (cons names bindings)
-                             (cons (append names (car bindings)) (cdr bindings)))]
-            [compiled-body (compile-body bound-body new-bindings)]
-            [body-length (length names)])
+     (let ([compiled-body (compile-body bound-body (cons names bindings))]
+           [body-length (length names)])
        (lambda ([env : ENV]) (FunV body-length compiled-body env #t)))]
     [(Call fun-expr arg-exprs)
      (let ([compiled-fun  (compile fun-expr bindings)]
@@ -334,7 +329,11 @@
          (let ([fval (compiled-fun env)]
                ;; delay evaluating the arguments
                [arg-vals (lambda ()
-                           (map (runner env) compiled-args))])
+                           (map (lambda ([compiled : (ENV -> VAL)]) 
+                                  (compiled env)) 
+                                compiled-args))]
+               [boxed-arg-vals (lambda ()
+                                 (map (boxed-runner env) compiled-args))])
            (cases fval
              [(PrimV proc) (proc (arg-vals))]
              [(FunV body-length compiled-body fun-env byref?)
@@ -342,7 +341,7 @@
                   (compiled-body (if byref?
                                      (cons (compiled-boxes-getter env)
                                                  fun-env)
-                                     (extend (arg-vals) fun-env)))
+                                     (cons (boxed-arg-vals) fun-env)))
                   (error 'FunV "arity mismatch"))]
              [else (error 'call "function call with a non-function: ~s"
                           fval)]))))]
@@ -373,9 +372,9 @@
 ;;; ==================================================================
 ;;; Tests
 
-
 (test (run "{{fun {x} {+ x 1}} 4}")
       => 5)
+
 (test (run "{bind {{add3 {fun {x} {+ x 3}}}} {add3 1}}")
       => 4)
 (test (run "{bind {{add3 {fun {x} {+ x 3}}}
@@ -412,6 +411,9 @@
 (test (run "{if {< 5 4} 6 7}")  => 7)
 (test (run "{if + 6 7}")        => 6)
 (test (run "{fun {x} x}")       =error> "returned a bad value")
+(test (run "{set! + /}")        =error> "Trying") ;;compile-time
+(test (run "{{rfun {x} {+ x 1}} +}") =error> "trying") ;;run-time
+(test (run "{{rfun {x} {+ x 1}} y}") =error> "no binding")
 
 ;; assignment tests
 (test (run "{set! {+ x 1} x}")  =error> "bad `set!' syntax")
@@ -468,11 +470,13 @@
 (test (compile-get-boxes (list (Num 1)) null) =error> "compiler disabled")
 
 ;; test for find-index
-(test (find-index 'a '((a b c) () (c d e))) => '(0 0))
-(test (find-index 'e '((a b c) () (c d e))) => '(2 2))
-(test (find-index 'c '((a b c) () (c d e))) => '(0 2))
-(test (find-index 'x '((a b c) () (c d e))) => #f)
+;;(test (find-index 'a '((a b c) () (c d e))) => '(0 0))
+;;(test (find-index 'e '((a b c) () (c d e))) => '(2 2))
+;;(test (find-index 'c '((a b c) () (c d e))) => '(0 2))
+;;(test (find-index 'x '((a b c) () (c d e))) => #f)
 
+
+#|
 (time (run "{bindrec {{fib {fun {n}
                             {if {< n 2}
                               n
@@ -480,4 +484,8 @@
                                   {fib {- n 2}}}}}}}
               {fib 27}}"))
 
+;; original TOY 1589ms
+;; basic compiler 1135ms
+;; This version 694ms
+|#
 ;;; ==================================================================
