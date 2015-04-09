@@ -47,24 +47,24 @@
     [(cons (and binder (or 'bind 'bindrec)) more)
      (match sexpr
        [(list _ (list (list (symbol: names) (sexpr: nameds)) ...)
-          (sexpr: body0) (sexpr: body) ...)
+              (sexpr: body0) (sexpr: body) ...)
         (if (unique-list? names)
-          ((if (eq? 'bind binder) Bind BindRec)
-           names
-           (map parse-sexpr nameds)
-           (map parse-sexpr (cons body0 body)))
-          (error 'parse-sexpr "duplicate `~s' names: ~s" binder names))]
+            ((if (eq? 'bind binder) Bind BindRec)
+             names
+             (map parse-sexpr nameds)
+             (map parse-sexpr (cons body0 body)))
+            (error 'parse-sexpr "duplicate `~s' names: ~s" binder names))]
        [else (error 'parse-sexpr "bad `~s' syntax in ~s"
                     binder sexpr)])]
     [(cons (and funner (or 'fun 'rfun)) more)
      (match sexpr
        [(list _ (list (symbol: names) ...)
-          (sexpr: body0) (sexpr: body) ...)
+              (sexpr: body0) (sexpr: body) ...)
         (if (unique-list? names)
-          ((if (eq? 'fun funner) Fun RFun)
-           names
-           (map parse-sexpr (cons body0 body)))
-          (error 'parse-sexpr "duplicate `~s' names: ~s" funner names))]
+            ((if (eq? 'fun funner) Fun RFun)
+             names
+             (map parse-sexpr (cons body0 body)))
+            (error 'parse-sexpr "duplicate `~s' names: ~s" funner names))]
        [else (error 'parse-sexpr "bad `~s' syntax in ~s"
                     funner sexpr)])]
     [(cons 'if more)
@@ -118,7 +118,7 @@
   (define new-env
     (cons (map (inst box VAL)
                (map (lambda (_) the-bogus-value) compiled-exprs))
-            env))
+          env))
   ;; note: no need to check the lengths here, since this is only
   ;; called for `bindrec', and the syntax make it impossible to have
   ;; different lengths
@@ -159,8 +159,8 @@
         #f
         (let ([1st (index x (car bindings) 0)])
           (if (number? 1st)
-            (list count 1st)
-            (find-index-helper x (cdr bindings) (+ 1 count))))))
+              (list count 1st)
+              (find-index-helper x (cdr bindings) (+ 1 count))))))
   (find-index-helper x bindings 0))
 
 (: unwrap-rktv : VAL -> Any)
@@ -215,11 +215,11 @@
   (let ([compiled-1st (compile (first exprs) bindings)]
         [rest         (rest exprs)])
     (if (null? rest)
-      compiled-1st
-      (let ([compiled-rest (compile-body rest bindings)])
-        (lambda (env)
-          (let ([ignored (compiled-1st env)])
-            (compiled-rest env))))))
+        compiled-1st
+        (let ([compiled-rest (compile-body rest bindings)])
+          (lambda (env)
+            (let ([ignored (compiled-1st env)])
+              (compiled-rest env))))))
   ;; the same thing, but using `foldl' to do the loop
   ;; (foldl (lambda ([expr : TOY] [compiled-prev : (ENV -> VAL)])
   ;;          (let ([compiled (compile expr)])
@@ -255,8 +255,8 @@
                (list-ref (list-ref env (first pos))
                          (second pos))
                (let ([found? (global-lookup name)])
-                  (when found? (error 'run-time 
-                                      "trying to mutating global"))))))]
+                 (when found? (error 'run-time 
+                                     "trying to mutating global"))))))]
       [else
        (lambda ([env : ENV])
          (error 'call "rfun application with a non-identifier ~s"
@@ -280,25 +280,25 @@
     (lambda (compiled) ((inst box VAL) (compiled env))))
   (unless (unbox compiler-enabled?)
     (error 'compile "compiler disabled"))
-    (cases expr
+  (cases expr
     [(Num n)   (lambda ([env : ENV]) (RktV n))]
     [(Id name) (let ([pos (find-index name bindings)])
-                  (lambda ([env : ENV])
-                    (if (list? pos)
-                        (unbox (list-ref (list-ref env
-                                                   (first pos))
-                                         (second pos)))
-                        (global-lookup name))))]
+                 (lambda ([env : ENV])
+                   (if (list? pos)
+                       (unbox (list-ref (list-ref env
+                                                  (first pos))
+                                        (second pos)))
+                       (global-lookup name))))]
     [(Set name new)
      (let ([compiled-new (compile* new)]
            [pos (find-index name bindings)])
        (lambda ([env : ENV])
          (if (list? pos)
-                (set-box! (list-ref (list-ref env (first pos))
-                                             (second pos))
-                          (compiled-new env))
-                (when (global-lookup name)
-                    (error 'compile "Trying to mutating a global")))
+             (set-box! (list-ref (list-ref env (first pos))
+                                 (second pos))
+                       (compiled-new env))
+             (when (global-lookup name)
+               (error 'compile "Trying to mutating a global")))
          the-bogus-value))]
     [(Bind names exprs bound-body)
      (let ([compiled-exprs (map compile* exprs)]
@@ -308,10 +308,11 @@
           (cons (map (boxed-runner env) compiled-exprs) env))))]
     [(BindRec names exprs bound-body)
      (let* ([new-bindings (cons names bindings)]
-            [compiled-exprs (map (lambda ([expr : TOY]) (compile expr new-bindings)) exprs)]
+            [compiled-exprs (map (lambda ([expr : TOY])
+                                   (compile expr new-bindings)) exprs)]
             [compiled-body  (compile-body bound-body new-bindings)])
-         (lambda ([env : ENV])
-           (compiled-body (extend-rec compiled-exprs env))))]
+       (lambda ([env : ENV])
+         (compiled-body (extend-rec compiled-exprs env))))]
     [(Fun names bound-body)
      (let ([compiled-body (compile-body bound-body (cons names bindings))]
            [body-length (length names)])
@@ -340,7 +341,7 @@
               (if (= arg-length body-length)
                   (compiled-body (if byref?
                                      (cons (compiled-boxes-getter env)
-                                                 fun-env)
+                                           fun-env)
                                      (cons (boxed-arg-vals) fun-env)))
                   (error 'FunV "arity mismatch"))]
              [else (error 'call "function call with a non-function: ~s"
@@ -353,8 +354,8 @@
          ((if (cases (compiled-cond env)
                 [(RktV v) v] ; Racket value => use as boolean
                 [else #t])   ; other values are always true
-            compiled-then
-            compiled-else)
+              compiled-then
+              compiled-else)
           env)))]))
 
 (: run : String -> Any)
@@ -489,3 +490,5 @@
 ;; This version 694ms
 |#
 ;;; ==================================================================
+
+(define minutes-spent 720)
