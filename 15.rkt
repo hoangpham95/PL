@@ -128,7 +128,11 @@
 (define-type IO
   [Print    VAL]      ; String
   [ReadLine VAL]      ; receiver: String -> IO
-  [Begin2   VAL VAL]) ; IO IO
+  [Begin2  VAL VAL]  ; IO IO
+  ;; mutation
+  [NewRef  VAL VAL]  ; init, receiver for new ref
+  [UnRef    VAL VAL]  ; ref, receiver for its value
+  [SetRef  VAL VAL]) ; ref, new value
 
 ;; a frame is an association list of names and values.
 (define-type FRAME = (Listof (List Symbol VAL)))
@@ -207,6 +211,10 @@
                   (list 'print  (racket-func->prim-val Print    #f))
                   (list 'read   (racket-func->prim-val ReadLine #f))
                   (list 'begin2 (racket-func->prim-val Begin2   #f))
+                  ;; mutations
+                  (list 'newref  (racket-func->prim-val NewRef   #f))
+                  (list 'unref   (racket-func->prim-val UnRef    #f))
+                  (list 'set-ref! (racket-func->prim-val SetRef   #f))
                   ;; values
                   (list 'true  (RktV #t))
                   (list 'false (RktV #f))
@@ -299,12 +307,15 @@
 ;; executes a `print' description
 (define (execute-print val)
   (let ([str (cases val [(RktV x) (and (string? x) x)] [else #f])])
-    (printf "not implemented\n")))
+    (if (not str)
+        (error 'execute-print "cannot `print' a non-string value")
+        (printf "~a" str))))
 
 (: execute-begin2 : VAL VAL -> Void)
 ;; executes a `begin2' description
 (define (execute-begin2 1st 2nd)
-  (printf "not implemented\n"))
+  (execute-val 1st)
+  (execute-val 2nd))
 
 (: execute-receiver : VAL (-> Any) -> Void)
 ;; helper for executing receivers, wraps the value in a RktV, and
@@ -315,13 +326,38 @@
 (define (execute-receiver receiver producer)
   (cases receiver
     [(FunV names body env)
-     (printf "not implemented\n")]
+     (execute-val
+      (eval body
+            (extend names (list (wrap-in-val (producer))) env)))]
     [else (error 'execute-receiver "expecting a receiver function")]))
 
 (: execute-read : VAL -> Void)
 ;; executes a `read' description
 (define (execute-read receiver)
-  (printf "not implemented\n"))
+  (execute-receiver receiver read-line))
+
+(: execute-newref : VAL VAL -> Void)
+;; executes a `Newref' description
+(define (execute-newref init receiver)
+  (execute-receiver receiver (lambda () (ref init))))
+
+(: execute-unref : VAL VAL -> Void)
+;; execute a `Unref' description
+(define (execute-unref ref receiver)
+  (cases ref
+         [(RktV realref) (if (ref? realref)
+                             (execute-receiver receiver (lambda () (unref realref)))
+                             (error 'execute-setref "expect a Ref"))]
+         [else (error 'execute-setref "expect a Ref")]))
+
+(: execute-setref : VAL VAL -> Void)
+;; execute a `Setref' description
+(define (execute-setref ref val)
+  (cases ref
+         [(RktV realref) (if (ref? realref)
+                             (set-ref! realref val)
+                             (error 'execute-setref "expect a Ref"))]
+         [else (error 'execute-setref "expect a Ref")]))
 
 (: execute-val : VAL -> Void)
 ;; extracts an IO from a VAL and executes it
@@ -335,7 +371,10 @@
       (cases io
         [(Print x)    (execute-print (strict x))]
         [(ReadLine x) (execute-read (strict x))]
-        [(Begin2 x y) (execute-begin2 x y)]))))
+        [(Begin2 x y) (execute-begin2 x y)]
+        [(NewRef x y) (execute-newref x (strict y))]
+        [(UnRef  x y) (execute-unref  (strict x) (strict y))]
+        [(SetRef x y) (execute-setref (strict x) y)]))))
 
 (: run-io : String -> Void)
 ;; evaluate a SLUG program contained in a string, and execute the
@@ -443,7 +482,7 @@
                 {let* {{x 1} {y {+ x 1}}} {+ x y}}}}")
       => 3)
 
-#| uncomment these tests when you have working code
+;;#| uncomment these tests when you have working code
 
 ;; macros for I/O
 (test
@@ -451,11 +490,13 @@
  (run-io
   "{with-stx {do {<-}
                  {{do {id <- {read}} next more ...}
-                  ???}
+                  {read {fun {id}
+                          {do next more ...}}}}
                  {{do {print str} next more ...}
-                  ???}
+                  {begin2 {print str}
+                          {do next more ...}}}
                  {{do expr}
-                  ???}}
+                  expr}}
      {do {print 'What is your name?\n'}
          {name <- {read}}
          {print 'What is your email?\n'}
@@ -469,12 +510,37 @@
           "What is your email?\n"
           "Your address is 'Foo <foo@bar.com>'\n")
 
+(test
+ (run-io
+  "{bind {{incref {fun {b}
+                  {unref b
+                    {fun {curval}
+                      {set-ref! b {+ 1 curval}}}}}}}
+    {newref 0
+      {fun {i}
+        {begin2
+          {incref i}
+          {begin2
+            {print 'i now holds: '}
+            {unref i
+              {fun {v}
+                {begin2 {print {number->string v}}
+                        {print '\n'}}}}}}}}}")
+ =output> "i now holds: 1")
+
 ;; macros for I/O and refs (note how a `do' block is treated as just a
 ;; value, since it is one)
 (test
  (run-io
   "{with-stx {do {<-}
-                 ???}
+                 {{do {id <- {f x ...}} next more ...}
+                  {f x ... {fun {id}
+                          {do next more ...}}}}
+                 {{do expr next more ...}
+                  {begin2 expr
+                          {do next more ...}}}
+                 {{do expr}
+                  expr}}
      {bind {{incref   {fun {b}
                         {do {curval <- {unref b}}
                             {set-ref! b {+ 1 curval}}}}}
@@ -488,6 +554,6 @@
            {thrice {do {incref i} {printref i ', '}}}
            {incref i} {printref i '.\n'}}}}")
  =output> "i holds: 1, 2, 3, 4.")
-|#
+
 
 ;;; ==================================================================
