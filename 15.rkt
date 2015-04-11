@@ -41,7 +41,7 @@
 ;; function (transforms an s-expression into an s-expression)
 
 (: parse-sexpr : Sexpr (Listof (List Symbol (Sexpr -> Sexpr)))
-                 -> SLUG)
+   -> SLUG)
 ;; parses *and* macro-expands s-expressions; the second argument is
 ;; the association list of transformers at this point.
 (define (parse-sexpr sexpr transformers)
@@ -52,56 +52,56 @@
   (let ([transformer (and (pair? sexpr)
                           (assq (car sexpr) transformers))])
     (if transformer
-      ;; if there is a transformer by this name, apply it and
-      ;; continue with the result
-      (parse* ((second transformer) sexpr))
-      (match sexpr
-        ;; if we see `with-stx', then recursively parse with the
-        ;; additional transformer that we make
-        [(cons 'with-stx more)
-         (match sexpr
-           [(list 'with-stx
-                  (list (symbol: name)
-                        (list (symbol: keywords) ...)
-                        (list (sexpr: pattern) (sexpr: result)) ...)
-                  body)
-            (parse-sexpr
-             body
-             (cons (list name (make-transformer
-                               keywords
-                               (map (lambda ([p : Sexpr] [r : Sexpr])
-                                      (list p r))
-                                    pattern result)))
-                   transformers))]
-           [else (error 'parse-sexpr "bad `with-stx' syntax in ~s"
-                        sexpr)])]
-        [(number: n)    (Num n)]
-        [(symbol: name) (Id name)]
-        [(string: s)    (Str s)]
-        [(cons 'bind more)
-         (match sexpr
-           [(list 'bind (list (list (symbol: names) (sexpr: nameds))
-                              ...)
-              body)
-            (if (unique-list? names)
-              (Bind names (map parse* nameds) (parse* body))
-              (error 'parse-sexpr "duplicate `bind' names: ~s" names))]
-           [else (error 'parse-sexpr "bad `bind' syntax in ~s" sexpr)])]
-        [(cons 'fun more)
-         (match sexpr
-           [(list 'fun (list (symbol: names) ...) body)
-            (if (unique-list? names)
-              (Fun names (parse* body))
-              (error 'parse-sexpr "duplicate `fun' names: ~s" names))]
-           [else (error 'parse-sexpr "bad `fun' syntax in ~s" sexpr)])]
-        [(cons 'if more)
-         (match sexpr
-           [(list 'if cond then else)
-            (If (parse* cond) (parse* then) (parse* else))]
-           [else (error 'parse-sexpr "bad `if' syntax in ~s" sexpr)])]
-        [(list fun (sexpr: args) ...) ; other lists are applications
-         (Call (parse* fun) (map parse* args))]
-        [else (error 'parse-sexpr "bad syntax in ~s" sexpr)]))))
+        ;; if there is a transformer by this name, apply it and
+        ;; continue with the result
+        (parse* ((second transformer) sexpr))
+        (match sexpr
+          ;; if we see `with-stx', then recursively parse with the
+          ;; additional transformer that we make
+          [(cons 'with-stx more)
+           (match sexpr
+             [(list 'with-stx
+                    (list (symbol: name)
+                          (list (symbol: keywords) ...)
+                          (list (sexpr: pattern) (sexpr: result)) ...)
+                    body)
+              (parse-sexpr
+               body
+               (cons (list name (make-transformer
+                                 keywords
+                                 (map (lambda ([p : Sexpr] [r : Sexpr])
+                                        (list p r))
+                                      pattern result)))
+                     transformers))]
+             [else (error 'parse-sexpr "bad `with-stx' syntax in ~s"
+                          sexpr)])]
+          [(number: n)    (Num n)]
+          [(symbol: name) (Id name)]
+          [(string: s)    (Str s)]
+          [(cons 'bind more)
+           (match sexpr
+             [(list 'bind (list (list (symbol: names) (sexpr: nameds))
+                                ...)
+                    body)
+              (if (unique-list? names)
+                  (Bind names (map parse* nameds) (parse* body))
+                  (error 'parse-sexpr "duplicate `bind' names: ~s" names))]
+             [else (error 'parse-sexpr "bad `bind' syntax in ~s" sexpr)])]
+          [(cons 'fun more)
+           (match sexpr
+             [(list 'fun (list (symbol: names) ...) body)
+              (if (unique-list? names)
+                  (Fun names (parse* body))
+                  (error 'parse-sexpr "duplicate `fun' names: ~s" names))]
+             [else (error 'parse-sexpr "bad `fun' syntax in ~s" sexpr)])]
+          [(cons 'if more)
+           (match sexpr
+             [(list 'if cond then else)
+              (If (parse* cond) (parse* then) (parse* else))]
+             [else (error 'parse-sexpr "bad `if' syntax in ~s" sexpr)])]
+          [(list fun (sexpr: args) ...) ; other lists are applications
+           (Call (parse* fun) (map parse* args))]
+          [else (error 'parse-sexpr "bad syntax in ~s" sexpr)]))))
 
 (: parse : String -> SLUG)
 ;; Parses a string containing an SLUG expression to a SLUG AST.
@@ -141,11 +141,11 @@
 ;; extends an environment with a new frame.
 (define (extend names values env)
   (if (= (length names) (length values))
-    (FrameEnv (map (lambda ([name : Symbol] [val : VAL])
-                     (list name val))
-                   names values)
-              env)
-    (error 'extend "arity mismatch for names: ~s" names)))
+      (FrameEnv (map (lambda ([name : Symbol] [val : VAL])
+                       (list name val))
+                     names values)
+                env)
+      (error 'extend "arity mismatch for names: ~s" names)))
 
 (: lookup : Symbol ENV -> VAL)
 ;; looks for a name in an environment, searching through each frame.
@@ -155,8 +155,8 @@
     [(FrameEnv frame rest)
      (let ([cell (assq name frame)])
        (if cell
-         (second cell)
-         (lookup name rest)))]))
+           (second cell)
+           (lookup name rest)))]))
 
 (: unwrap-rktv : VAL -> Any)
 ;; helper for `racket-func->prim-val': strict and unwrap a RktV
@@ -268,8 +268,8 @@
      (eval* (if (cases (strict (eval* cond-expr))
                   [(RktV v) v] ; Racket value => use as boolean
                   [else #t])   ; other values are always true
-              then-expr
-              else-expr))]))
+                then-expr
+                else-expr))]))
 
 (: run : String -> Any)
 ;; evaluate a SLUG program contained in a string
@@ -345,19 +345,19 @@
 ;; execute a `Unref' description
 (define (execute-unref ref receiver)
   (cases ref
-         [(RktV realref) (if (ref? realref)
-                             (execute-receiver receiver (lambda () (unref realref)))
-                             (error 'execute-setref "expect a Ref"))]
-         [else (error 'execute-setref "expect a Ref")]))
+    [(RktV realref) (if (ref? realref)
+                        (execute-receiver receiver (lambda () (unref realref)))
+                        (error 'execute-unref "expect a Ref"))]
+    [else (error 'execute-unref "expect a Ref")]))
 
 (: execute-setref : VAL VAL -> Void)
 ;; execute a `Setref' description
 (define (execute-setref ref val)
   (cases ref
-         [(RktV realref) (if (ref? realref)
-                             (set-ref! realref val)
-                             (error 'execute-setref "expect a Ref"))]
-         [else (error 'execute-setref "expect a Ref")]))
+    [(RktV realref) (if (ref? realref)
+                        (set-ref! realref val)
+                        (error 'execute-setref "expect a Ref"))]
+    [else (error 'execute-setref "expect a Ref")]))
 
 (: execute-val : VAL -> Void)
 ;; extracts an IO from a VAL and executes it
@@ -367,14 +367,14 @@
                 [(RktV x) (and (IO? x) x)]
                 [else #f])])
     (if (not io)
-      (error 'execute-val "expecting an IO value: ~s" val)
-      (cases io
-        [(Print x)    (execute-print (strict x))]
-        [(ReadLine x) (execute-read (strict x))]
-        [(Begin2 x y) (execute-begin2 x y)]
-        [(NewRef x y) (execute-newref x (strict y))]
-        [(UnRef  x y) (execute-unref  (strict x) (strict y))]
-        [(SetRef x y) (execute-setref (strict x) y)]))))
+        (error 'execute-val "expecting an IO value: ~s" val)
+        (cases io
+          [(Print x)    (execute-print (strict x))]
+          [(ReadLine x) (execute-read (strict x))]
+          [(Begin2 x y) (execute-begin2 x y)]
+          [(NewRef x y) (execute-newref x (strict y))]
+          [(UnRef  x y) (execute-unref  (strict x) (strict y))]
+          [(SetRef x y) (execute-setref (strict x) y)]))))
 
 (: run-io : String -> Void)
 ;; evaluate a SLUG program contained in a string, and execute the
@@ -457,6 +457,10 @@
 (test input: "blah"
       (run-io "{read {fun {x} {begin2 {print x} {print x}}}}")
       =output> "blahblah")
+(test (run-io "{unref begin2 print}") =error> "expect a Ref")
+(test (run-io "{set-ref! begin2 print}") =error> "expect a Ref")
+(test (run-io "{unref 2 3}") =error> "expect a Ref")
+(test (run-io "{set-ref! 2 3}") =error> "expect a Ref")
 
 (test
  input: "foo"
@@ -467,7 +471,7 @@
                            {begin2 {print name}
                                    {print '''\n'}}}}}}")
  =output> "What is your name?"
-          "Your name is 'foo'\n")
+ "Your name is 'foo'\n")
 
 ;; test two macros
 (test (run "{with-stx {let {}
@@ -507,8 +511,8 @@
          {print email}
          {print '>''\n'}}}")
  =output> "What is your name?\n"
-          "What is your email?\n"
-          "Your address is 'Foo <foo@bar.com>'\n")
+ "What is your email?\n"
+ "Your address is 'Foo <foo@bar.com>'\n")
 
 (test
  (run-io
@@ -557,3 +561,5 @@
 
 
 ;;; ==================================================================
+
+(define minutes-spent 420)
