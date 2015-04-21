@@ -148,5 +148,4 @@
 (test (not (zeros=ones "00011")))
 (test (not (zeros=ones "00101111")))
 
-
 (define minutes-spent 90)
