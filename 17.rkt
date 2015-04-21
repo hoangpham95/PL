@@ -2,6 +2,7 @@
 
 (define-type Token = (U Symbol Integer))
 
+
 ;; A macro that defines a DFA language
 (define-syntax automaton
   (syntax-rules (: ->)
@@ -55,27 +56,58 @@
 (test (not (div5 (number->string 1234 2))))
 (test (not (div5 (number->string 123453 2))))
 
+
 (define-syntax pushdown
   (syntax-rules (: ->)
     [(pushdown init-state end-state
        [state : (input-sym input-stack -> new-state push-down) ...]
        ...)
      (lambda (string)
-       (: init : (Listof Token) (Listof Token) -> Boolean)
-       (define (init stream stack)
+       (: state : (Listof Token) (Listof Token) -> Boolean)
+       ...
+       (define (state stream stack)
          (match (list stream stack)
            [(list '() '()) #t]
            [(list (list-rest 'open more-input)
                   (list-rest       more-stack))
-            (init more-input (append '(open) more-stack))]
+            (new-state more-input (append '(open) more-stack))]
+           ...
            [(list (list-rest 'close more-input)
                   (list-rest 'open  more-stack))
-            (init more-input (append '() more-stack))]
+            (new-state more-input (append '() more-stack))]
+           ...
            [(list (list-rest '* more-input)
                   (list-rest '* more-stack))
-            (init more-input (append '() more-stack))]
+            (new-state more-input (append '() more-stack))]
+           ...
            [_ #f]))
-       (init (append (explode-string string) '(*)) '(*)))]))
+       ...
+       (init-state (append (explode-string string) '(*)) '(*)))]))
+
+
+
+
+;;(define-syntax pushdown
+;;  (syntax-rules (: ->)
+;;    [(pushdown init-state end-state
+;;               [state : (input-sym input-stack -> new-state push-down) ...]
+;;               ...)
+;;     (lambda (string)
+;;       (: state : (Listof Token) (Listof Token) -> Boolean)
+;;       ...
+;;       (define (state stream stack)
+;;         (printf "~s ~s\n" 'input-sym 'input-stack)
+;;         ...
+;;         (match (list stream stack)
+;;           [(list '() '()) (eq? 'new-state 'end-state)]
+;;           ...
+;;           [(list (list-rest 'input-sym more-input)
+;;                  (list-rest 'input-stack more-stack))
+;;            (new-state more-input (append 'push-down more-stack))]
+;;           ...
+;;           [_ #f]))
+;;       ...
+;;       (init-state (append (explode-string string) '(*)) '(*)))]))
 
 (: balanced : String -> Boolean)
 ;; Identifies strings that contain only balanced parentheses
@@ -83,6 +115,7 @@
                    [init : ((open) ()      -> init (open))
                            ((close) (open) -> init ())
                            ((*) (*)        -> init ())]))
+
 
 ;; tests:
 (test (balanced ""))
@@ -92,6 +125,8 @@
 (test (not (balanced "(")))
 (test (not (balanced ")")))
 (test (not (balanced ")(")))
+
+
 
 (: zeros=ones : String -> Boolean)
 ;; Identifies strings of n 0s followed by n 1s
@@ -112,5 +147,6 @@
 (test (not (zeros=ones "10")))
 (test (not (zeros=ones "00011")))
 (test (not (zeros=ones "00101111")))
+
 
 (define minutes-spent 90)
