@@ -31,11 +31,11 @@
               [end  : (r -> end)]))
 
 ;; tests:
-(test (cXr "cadr"))
-(test (cXr "cadadadadadadddddaaarrr"))
-(test (not (cXr "ccadr")))
-(test (not (cXr "r")))
-(test (not (cXr "c"))) ; BAD TEST!
+;(test (cXr "cadr"))
+;(test (cXr "cadadadadadadddddaaarrr"))
+;(test (not (cXr "ccadr")))
+;(test (not (cXr "r")))
+;(test (not (cXr "c"))) ; BAD TEST!
 
 (: div5 : String -> Boolean)
 ;; Determine whether a binary number is divisible by 5
@@ -48,12 +48,12 @@
     [mod4 : (0 -> mod3) (1 -> mod4)]))
 
 ;;tests:
-(test (div5 ""))
-(test (div5 "0"))
-(test (div5 "000"))
-(test (div5 (number->string 12345 2)))
-(test (not (div5 (number->string 1234 2))))
-(test (not (div5 (number->string 123453 2))))
+;(test (div5 ""))
+;(test (div5 "0"))
+;(test (div5 "000"))
+;(test (div5 (number->string 12345 2)))
+;(test (not (div5 (number->string 1234 2))))
+;(test (not (div5 (number->string 123453 2))))
 
 (define-syntax pushdown
   (syntax-rules (: ->)
@@ -61,21 +61,27 @@
        [state : (input-sym input-stack -> new-state push-down) ...]
        ...)
      (lambda (string)
-       (: init : (Listof Token) (Listof Token) -> Boolean)
-       (define (init stream stack)
+       (: state : (Listof Token) (Listof Token) -> Boolean)
+       ...
+       (define (state stream stack)
          (match (list stream stack)
-           [(list '() '()) #t]
-           [(list (list-rest 'open more-input)
+           [(list '() '()) (eq? 'new-state 'end-state)]
+           ...
+           [(list (list-rest 'input-sym more-input)
                   (list-rest       more-stack))
-            (init more-input (append '(open) more-stack))]
-           [(list (list-rest 'close more-input)
-                  (list-rest 'open  more-stack))
-            (init more-input (append '() more-stack))]
-           [(list (list-rest '* more-input)
-                  (list-rest '* more-stack))
-            (init more-input (append '() more-stack))]
+            (new-state more-input (append 'push-down more-stack))]
+           ...
+           [(list (list-rest 'input-sym more-input)
+                  (list-rest 'input-stack  more-stack))
+            (new-state more-input (append 'push-down more-stack))]
+           ...
+           [(list (list-rest more-input)
+                  (list-rest 'input-stack more-stack))
+            (new-state more-input (append 'push-down more-stack))]
+           ...
            [_ #f]))
-       (init (append (explode-string string) '(*)) '(*)))]))
+       ...
+       (init-state (append (explode-string string) '(*)) '(*)))]))
 
 (: balanced : String -> Boolean)
 ;; Identifies strings that contain only balanced parentheses
@@ -85,32 +91,32 @@
                            ((*) (*)        -> init ())]))
 
 ;; tests:
-(test (balanced ""))
 (test (balanced "()"))
-(test (balanced "(((())))"))
-(test (balanced "((()())(()))"))
-(test (not (balanced "(")))
-(test (not (balanced ")")))
-(test (not (balanced ")(")))
-
-(: zeros=ones : String -> Boolean)
-;; Identifies strings of n 0s followed by n 1s
-(define zeros=ones
-  (pushdown 0s end
-    [0s  : ((0) ()  -> 0s  (A))
-           (()  ()  -> 1s  ())]
-    [1s  : ((1) (A) -> 1s  ())
-           ((*) (*) -> end (*))]
-    [end : (()  (*) -> end ())]))
-
-;; tests:
-(test (zeros=ones ""))
-(test (zeros=ones "01"))
-(test (zeros=ones "000111"))
-(test (not (zeros=ones "0")))
-(test (not (zeros=ones "11")))
-(test (not (zeros=ones "10")))
-(test (not (zeros=ones "00011")))
-(test (not (zeros=ones "00101111")))
+(test (balanced ""))
+;(test (balanced "(((())))"))
+;(test (balanced "((()())(()))"))
+;(test (not (balanced "(")))
+;(test (not (balanced ")")))
+;(test (not (balanced ")(")))
+;
+;(: zeros=ones : String -> Boolean)
+;;; Identifies strings of n 0s followed by n 1s
+;(define zeros=ones
+;  (pushdown 0s end
+;    [0s  : ((0) ()  -> 0s  (A))
+;           (()  ()  -> 1s  ())]
+;    [1s  : ((1) (A) -> 1s  ())
+;           ((*) (*) -> end (*))]
+;    [end : (()  (*) -> end ())]))
+;
+;;; tests:
+;(test (zeros=ones ""))
+;(test (zeros=ones "01"))
+;(test (zeros=ones "000111"))
+;(test (not (zeros=ones "0")))
+;(test (not (zeros=ones "11")))
+;(test (not (zeros=ones "10")))
+;(test (not (zeros=ones "00011")))
+;(test (not (zeros=ones "00101111")))
 
 (define minutes-spent 90)
